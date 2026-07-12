@@ -31,8 +31,11 @@ services:
       - key: CLIENT_URL
         value: https://codesage-ai.onrender.com
 
+      # VITE_API_URL: leave empty — the frontend and backend are served
+      # from the same origin on Render, so relative URLs work automatically.
+      # Setting it to the wrong URL breaks all API calls.
       - key: VITE_API_URL
-        value: https://codesage-ai.onrender.com
+        value: ""
 
       # ── Supabase ─────────────────────────────────────────────────
       - key: SUPABASE_URL

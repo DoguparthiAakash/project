@@ -17,7 +17,10 @@ export interface ExecuteResult {
   compileError?: string
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001"
+// In production on Render, frontend and backend are the same origin.
+// Empty VITE_API_URL means use relative URLs (same origin).
+// In local dev, fall back to http://localhost:3001.
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:3001" : "")
 
 // ─── Code review / analysis ───────────────────────────────────────────────────
 
