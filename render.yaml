@@ -1,0 +1,81 @@
+services:
+  - type: web
+    name: codesage-ai
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: "npm install && npm run build && cd server && npm install"
+    startCommand: "cd server && node index.js"
+
+    # ── Every variable listed here will appear in the Render dashboard
+    #    under Environment → Environment Variables so you can paste your
+    #    keys in without touching any code or files.
+    #
+    #    Variables marked  sync: false  are SECRET — Render will hide
+    #    the value after you save it and never expose it in logs.
+    # ────────────────────────────────────────────────────────────────
+    envVars:
+
+      # ── Runtime ──────────────────────────────────────────────────
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 3000
+
+      # Set both to your Render service URL after first deploy.
+      # Example: https://codesage-ai.onrender.com
+      - key: SERVER_URL
+        value: https://codesage-ai.onrender.com
+
+      - key: CLIENT_URL
+        value: https://codesage-ai.onrender.com
+
+      - key: VITE_API_URL
+        value: https://codesage-ai.onrender.com
+
+      # ── Supabase ─────────────────────────────────────────────────
+      - key: SUPABASE_URL
+        sync: false       # paste value in Render dashboard
+
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      - key: VITE_SUPABASE_URL
+        sync: false
+
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+
+      # ── JWT ──────────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false       # generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+      # ── GitHub OAuth App ─────────────────────────────────────────
+      - key: GITHUB_CLIENT_ID
+        sync: false
+
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+
+      # ── AI Providers — add whichever keys you have ───────────────
+      - key: GROQ_API_KEY
+        sync: false       # https://console.groq.com/keys
+
+      - key: OPENAI_API_KEY
+        sync: false       # https://platform.openai.com/api-keys
+
+      - key: GEMINI_API_KEY
+        sync: false       # https://aistudio.google.com/app/apikey
+
+      - key: ANTHROPIC_API_KEY
+        sync: false       # https://console.anthropic.com/settings/keys
+
+      - key: XAI_API_KEY
+        sync: false       # https://console.x.ai
+
+      - key: NVIDIA_API_KEY
+        sync: false       # https://build.nvidia.com
+
+      - key: OPENROUTER_API_KEY
+        sync: false       # https://openrouter.ai/keys
