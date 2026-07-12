@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: "npm install && npm run build && cd server && npm install"
-    startCommand: "cd server && node index.js"
+    startCommand: "npm start"
 
     # ── Every variable listed here will appear in the Render dashboard
     #    under Environment → Environment Variables so you can paste your
