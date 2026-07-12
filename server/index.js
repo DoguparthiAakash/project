@@ -33,18 +33,15 @@ app.use(
   })
 )
 
-// Allow frontend (which has COEP: require-corp) to fetch from backend
-app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  next();
-});
-
-// ─── COOP/COEP headers for SharedArrayBuffer (WebContainers, CheerpX) ─────────
-// These are required for features that use SharedArrayBuffer (e.g. WebContainers,
-// CheerpX in-browser runtime). Must be set on every response, including the HTML.
+// ─── Cross-origin headers ─────────────────────────────────────────────────────
+// Allow the frontend (loaded from the same origin in production) to fetch API
+// responses. CORP: cross-origin is needed so the browser doesn't block API
+// responses when COEP is active on a specific page that needs SharedArrayBuffer.
+// We do NOT set COEP globally here — doing so would block every third-party
+// resource (CDN fonts, avatars, etc.) and cause a blank page.
+// The WebContainers / CheerpX terminal pages opt-in via their own meta tags.
 app.use((_req, res, next) => {
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
 });
 
