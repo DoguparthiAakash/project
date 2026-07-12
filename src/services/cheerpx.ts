@@ -1,30 +1,28 @@
-import * as CheerpX from '@leaningtech/cheerpx';
+// CheerpX is loaded dynamically to avoid crashing the app at startup.
+// @leaningtech/cheerpx checks for crossOriginIsolated at import time and
+// throws if it is false — which would break the entire JS bundle before
+// React even mounts. Dynamic import defers that check to when the terminal
+// is actually opened.
 
-let bootPromise: Promise<CheerpX.Linux> | null = null;
-let cxInstance: CheerpX.Linux | null = null;
+let bootPromise: Promise<any> | null = null;
+let cxInstance: any | null = null;
 
-// Use the webvm image as a base
 const IMAGE_URL = "https://disks.webvm.io/debian_large_20230522_5044875331.ext2";
 
-export async function getCheerpX(): Promise<CheerpX.Linux> {
+export async function getCheerpX(): Promise<any> {
   if (!bootPromise) {
     bootPromise = (async () => {
-      // 1. Create a cloud device for the base OS image
+      // Dynamic import — only runs when this function is called, not at module load
+      const CheerpX = await import('@leaningtech/cheerpx');
+
       const cloudDevice = await CheerpX.CloudDevice.create(IMAGE_URL);
-      
-      // 2. Create an IndexedDB device for persistent, writable storage
-      const idbDevice = await CheerpX.IDBDevice.create("cheerpx_storage");
-      
-      // 3. Create an overlay device that combines the read-only base with the writable storage
+      const idbDevice   = await CheerpX.IDBDevice.create("cheerpx_storage");
       const overlayDevice = await CheerpX.OverlayDevice.create(cloudDevice, idbDevice);
-      
-      // 4. Initialize the Linux environment with the overlay device
+
       cxInstance = await CheerpX.Linux.create({
-        mounts: [
-          { type: "ext2", path: "/", dev: overlayDevice }
-        ]
+        mounts: [{ type: "ext2", path: "/", dev: overlayDevice }],
       });
-      
+
       return cxInstance;
     })();
   }
@@ -34,17 +32,19 @@ export async function getCheerpX(): Promise<CheerpX.Linux> {
 import { fetchRepoTree } from './webcontainer';
 import type { FileSystemTree } from '@webcontainer/api';
 
-export async function syncRepoToCheerpX(owner: string, repo: string, branch: string, cx: any) {
-  // We can't use git clone inside CheerpX because Tailscale network is not configured.
-  // Instead, we will fetch the repo tree using GitHub API and write it to the WebVM.
-  
+export async function syncRepoToCheerpX(
+  owner: string,
+  repo: string,
+  branch: string,
+  cx: any
+) {
   await cx.run('/bin/bash', ['-c', `mkdir -p /home/user/workspace/${repo}`]);
-  
+
   const tree = await fetchRepoTree(owner, repo, branch);
-  
+
   let script = `#!/bin/bash\n`;
   script += `cd /home/user/workspace/${repo}\n`;
-  
+
   function buildScript(nodeTree: FileSystemTree, currentPath: string) {
     for (const [name, node] of Object.entries(nodeTree)) {
       const fullPath = currentPath ? `${currentPath}/${name}` : name;
@@ -52,12 +52,11 @@ export async function syncRepoToCheerpX(owner: string, repo: string, branch: str
         script += `mkdir -p "${fullPath}"\n`;
         buildScript(node.directory, fullPath);
       } else if ('file' in node && 'contents' in node.file) {
-        // Base64 encode the content safely
         try {
-          const content = typeof node.file.contents === 'string' 
-            ? node.file.contents 
-            : new TextDecoder().decode(node.file.contents);
-            
+          const content =
+            typeof node.file.contents === 'string'
+              ? node.file.contents
+              : new TextDecoder().decode(node.file.contents);
           const b64 = btoa(unescape(encodeURIComponent(content)));
           script += `echo "${b64}" | base64 -d > "${fullPath}"\n`;
         } catch (e) {
@@ -66,12 +65,14 @@ export async function syncRepoToCheerpX(owner: string, repo: string, branch: str
       }
     }
   }
-  
+
   buildScript(tree, "");
-  
-  // Write the script to a temporary file via a small base64 command, then execute it
+
   const scriptB64 = btoa(unescape(encodeURIComponent(script)));
-  await cx.run('/bin/bash', ['-c', `echo "${scriptB64}" | base64 -d > /tmp/sync.sh && bash /tmp/sync.sh`]);
-  
+  await cx.run('/bin/bash', [
+    '-c',
+    `echo "${scriptB64}" | base64 -d > /tmp/sync.sh && bash /tmp/sync.sh`,
+  ]);
+
   return `/home/user/workspace/${repo}`;
 }
