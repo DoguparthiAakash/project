@@ -18,7 +18,7 @@ import { GenerateProjectDialog } from "@/components/GenerateProjectDialog"
 import { GenerationOverlay } from "@/components/GenerationOverlay"
 import { ProjectWorkspace } from "@/components/ProjectWorkspace"
 import { ghListRepos, type GHRepo, submitAgentWorkload } from "@/services/api"
-import { loadSettings, hasValidKey, AI_PROVIDERS, getActiveProviderSettings } from "@/services/settings"
+import { loadSettings, hasValidKey, AI_PROVIDERS, getAgentSettings } from "@/services/settings"
 import { useGitAuth } from "@/hooks/useGitHubAuth"
 import type { AppSettings } from "@/types/settings"
 import { cn } from "@/lib/utils"
@@ -38,7 +38,7 @@ export default function DashboardPage() {
   // ── settings ─────────────────────────────────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [appSettings, setAppSettings] = useState<AppSettings>(loadSettings)
-  const activeProviderMeta = AI_PROVIDERS.find((p) => p.id === appSettings.activeProvider)
+  const coderProviderMeta = AI_PROVIDERS.find((p) => p.id === appSettings.agents.coder)
 
   // ── repos ────────────────────────────────────────────────────────────────────
   const [repos, setRepos] = useState<GHRepo[]>([])
@@ -88,7 +88,7 @@ export default function DashboardPage() {
   const handleGenerateProject = async (data: any) => {
     setIsGenerating(true)
     try {
-      const { provider: aiProvider, apiKey: aiKey, model: aiModel } = getActiveProviderSettings(appSettings)
+      const { provider: aiProvider, apiKey: aiKey, model: aiModel } = getAgentSettings(appSettings, 'coder')
       
       const fallbackProviders = Object.entries(appSettings.providers)
         .filter(([_, ps]) => ps.apiKey.trim().length > 0)
@@ -161,7 +161,7 @@ export default function DashboardPage() {
           <img src="/vite.svg" alt="Logo" className="size-8 rounded-xl object-contain shadow-sm bg-background border border-border/50" />
           <span className="font-bold text-lg tracking-tight">CodeSage</span>
           <Badge variant="outline" className="text-xs px-2 hidden sm:flex bg-primary/5 text-primary border-primary/20">
-            {activeProviderMeta?.name.split(" ")[0] ?? "AI"} Platform
+            {coderProviderMeta?.name.split(" ")[0] ?? "AI"} Platform
           </Badge>
         </div>
 

@@ -25,7 +25,11 @@ export interface ThemeColors {
 }
 
 export interface AppSettings {
-  activeProvider: AIProviderId
+  agents: {
+    planner: AIProviderId
+    coder: AIProviderId
+    fallback: AIProviderId
+  }
   providers: Record<AIProviderId, ProviderSettings>
   devopsAgentPermission: 'ask' | 'auto'
   colors: {

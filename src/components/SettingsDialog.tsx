@@ -288,7 +288,9 @@ export function SettingsDialog({ open, onClose, onSave }: SettingsDialogProps) {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const activeProvider = AI_PROVIDERS.find((p) => p.id === settings.activeProvider)!
+  const plannerProvider = AI_PROVIDERS.find((p) => p.id === settings.agents.planner)!
+  const coderProvider = AI_PROVIDERS.find((p) => p.id === settings.agents.coder)!
+  const fallbackProvider = AI_PROVIDERS.find((p) => p.id === settings.agents.fallback)!
   const configuredCount = AI_PROVIDERS.filter(
     (p) => settings.providers[p.id]?.apiKey?.trim()
   ).length
@@ -323,23 +325,30 @@ export function SettingsDialog({ open, onClose, onSave }: SettingsDialogProps) {
 
           {/* AI Providers Tab Content */}
           <TabsContent value="ai" className="flex flex-col flex-1 min-h-0 m-0 data-[state=inactive]:hidden">
-            {/* Active provider summary */}
-            <div className="m-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5 flex items-center gap-3">
-            <Cpu className="size-4 text-primary shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground">Active provider</p>
-              <p className="text-sm font-medium">{activeProvider.name}</p>
+            <div className="m-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 mb-1">
+                <Cpu className="size-4 text-primary shrink-0" />
+                <span className="text-sm font-medium">Pipeline Configuration</span>
+                <Badge variant="secondary" className="text-xs ml-auto">
+                  {configuredCount}/{AI_PROVIDERS.length} configured
+                </Badge>
+              </div>
+              <div className="text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">Planner:</span>
+                <span className="font-medium">{plannerProvider.name}</span>
+              </div>
+              <div className="text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">Coder:</span>
+                <span className="font-medium">{coderProvider.name}</span>
+              </div>
+              <div className="text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">Fallback:</span>
+                <span className="font-medium">{fallbackProvider.name}</span>
+              </div>
             </div>
-            <Badge variant="secondary" className="text-xs shrink-0">
-              {configuredCount}/{AI_PROVIDERS.length} configured
-            </Badge>
-          </div>
 
         <Tabs
-          value={settings.activeProvider}
-          onValueChange={(v) =>
-            setSettings((s) => ({ ...s, activeProvider: v as AIProviderId }))
-          }
+          defaultValue="groq"
           className="flex flex-col flex-1 min-h-0"
         >
           {/* Provider tabs — horizontal scrollable */}
@@ -389,31 +398,39 @@ export function SettingsDialog({ open, onClose, onSave }: SettingsDialogProps) {
                   onChange={setSettings}
                 />
 
-                {/* Set as active */}
-                {settings.activeProvider !== p.id && (
-                  <div className="mt-6 pt-5 border-t border-border">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 w-full"
-                      onClick={() =>
-                        setSettings((s) => ({ ...s, activeProvider: p.id }))
-                      }
+                {/* Role Assignments */}
+                <div className="mt-6 pt-5 border-t border-border">
+                  <h4 className="text-sm font-medium mb-3">Assign Role in Pipeline</h4>
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant={settings.agents.planner === p.id ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => setSettings(s => ({ ...s, agents: { ...s.agents, planner: p.id } }))}
+                      className="justify-start"
                     >
-                      <ChevronRight className="size-3.5" />
-                      Use {p.name} as active provider
+                      {settings.agents.planner === p.id && <Check className="size-3.5 mr-2"/>}
+                      Planner (Base & Requirements)
+                    </Button>
+                    <Button 
+                      variant={settings.agents.coder === p.id ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => setSettings(s => ({ ...s, agents: { ...s.agents, coder: p.id } }))}
+                      className="justify-start"
+                    >
+                      {settings.agents.coder === p.id && <Check className="size-3.5 mr-2"/>}
+                      Coder (Logic & Testing)
+                    </Button>
+                    <Button 
+                      variant={settings.agents.fallback === p.id ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => setSettings(s => ({ ...s, agents: { ...s.agents, fallback: p.id } }))}
+                      className="justify-start"
+                    >
+                      {settings.agents.fallback === p.id && <Check className="size-3.5 mr-2"/>}
+                      Fallback Coder (If Coder fails)
                     </Button>
                   </div>
-                )}
-
-                {settings.activeProvider === p.id && (
-                  <div className="mt-6 pt-5 border-t border-border">
-                    <p className="text-xs text-primary flex items-center gap-1.5 font-medium">
-                      <Check className="size-3.5" />
-                      This is your active provider — all reviews will use {p.name}
-                    </p>
-                  </div>
-                )}
+                </div>
               </TabsContent>
             ))}
           </ScrollArea>

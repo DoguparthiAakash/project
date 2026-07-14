@@ -227,7 +227,7 @@ export async function handleChatProject(req, res) {
     const userId = req.userId
     const { owner, repo, threadId } = req.params
     const branch = req.query.branch || "main"
-    const { provider, apiKey, model, targetPath, message, attachments } = req.body
+    const { agents, targetPath, message, attachments } = req.body
 
     // 1. Save the user's new message to the database
     await saveChatMessage(userId, threadId, owner, repo, 'user', message, [], attachments || [])
@@ -295,10 +295,55 @@ CRITICAL RULES FOR CODE CHANGES:
       }))
     ]
 
-    // 6. Call AI
-    const rawText = await generateChat(aiMessages, { provider, apiKey, model })
-    
-    let parsed
+    // 6. 3-Agent Pipeline Orchestration
+    let rawText = ""
+    let parsed = null
+
+    // 6.1 Call Planner
+    try {
+      const plannerPrompt = `Analyze this task and break it down into an execution plan. Do not generate code yet. Focus on architecture and steps. User request: ${message}`
+      
+      const plannerSystemMessage = {
+        role: 'system',
+        content: `You are the Planner Agent. Your job is to understand the codebase context and break the user's request into a step-by-step implementation plan. 
+Project context (truncated):
+${projectContext.substring(0, 15000)}`
+      }
+      
+      const plannerMessages = [
+        plannerSystemMessage,
+        ...history.map(msg => ({ role: msg.role, content: msg.content, attachments: msg.attachments || [] })),
+        { role: 'user', content: plannerPrompt, attachments: attachments || [] }
+      ]
+      
+      const plannerConfig = agents?.planner || { provider: "nvidia" }
+      const plannerResponse = await generateChat(plannerMessages, plannerConfig)
+      
+      // 6.2 Call Coder
+      const coderSystemMessage = { ...systemMessage } // Uses the original JSON-schema enforcing system prompt
+      
+      const coderPrompt = `The Planner Agent has created the following plan:\n${plannerResponse}\n\nPlease execute this plan and provide the code fixes in the required JSON format. Original request: ${message}`
+      const coderMessages = [
+        coderSystemMessage,
+        ...history.map(msg => ({ role: msg.role, content: msg.content, attachments: msg.attachments || [] })),
+        { role: 'user', content: coderPrompt, attachments: attachments || [] }
+      ]
+
+      try {
+        const coderConfig = agents?.coder || { provider: "groq" }
+        rawText = await generateChat(coderMessages, coderConfig)
+      } catch (coderErr) {
+        console.warn(`Coder agent failed (${coderErr.message}). Falling back to Fallback Agent...`)
+        
+        // 6.3 Call Fallback Coder
+        const fallbackConfig = agents?.fallback || { provider: "openrouter" }
+        rawText = await generateChat(coderMessages, fallbackConfig)
+      }
+
+    } catch (pipelineErr) {
+      // If planner or fallback fails, throw to general error handler
+      throw pipelineErr
+    }
     try {
       // Use RegExp to avoid syntax highlighter issues with backticks in regex literals
       const jsonRegex = new RegExp("```json\\n?", "g")

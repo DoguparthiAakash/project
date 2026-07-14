@@ -109,7 +109,11 @@ function defaultSettings(): AppSettings {
     providers[p.id] = { apiKey: "", model: p.defaultModel }
   }
   return { 
-    activeProvider: "groq", 
+    agents: {
+      planner: "nvidia",
+      coder: "groq",
+      fallback: "openrouter"
+    },
     providers,
     devopsAgentPermission: "ask",
     colors: {
@@ -143,7 +147,7 @@ export function loadSettings(): AppSettings {
     // Merge with defaults to handle new providers added later
     const defaults = defaultSettings()
     return {
-      activeProvider: parsed.activeProvider ?? defaults.activeProvider,
+      agents: parsed.agents ?? defaults.agents,
       providers: { ...defaults.providers, ...(parsed.providers ?? {}) },
       devopsAgentPermission: parsed.devopsAgentPermission ?? defaults.devopsAgentPermission,
       colors: {
@@ -161,12 +165,12 @@ export function saveSettings(settings: AppSettings): void {
   window.dispatchEvent(new Event("settingsUpdated"))
 }
 
-export function getActiveProviderSettings(settings: AppSettings): {
+export function getAgentSettings(settings: AppSettings, role: "planner" | "coder" | "fallback"): {
   provider: AIProviderId
   apiKey: string
   model: string
 } {
-  const p = settings.activeProvider
+  const p = settings.agents[role] || "groq"
   return {
     provider: p,
     apiKey:   settings.providers[p]?.apiKey ?? "",
@@ -174,7 +178,7 @@ export function getActiveProviderSettings(settings: AppSettings): {
   }
 }
 
-export function hasValidKey(settings: AppSettings): boolean {
-  const { apiKey } = getActiveProviderSettings(settings)
+export function hasValidKey(settings: AppSettings, role: "planner" | "coder" | "fallback" = "coder"): boolean {
+  const { apiKey } = getAgentSettings(settings, role)
   return apiKey.trim().length > 0
 }

@@ -1,5 +1,5 @@
 import type { ReviewRequest, ReviewResult } from "@/types/review"
-import { loadSettings, getActiveProviderSettings } from "@/services/settings"
+import { loadSettings, getAgentSettings } from "@/services/settings"
 
 export interface ExecuteRequest {
   code: string
@@ -26,7 +26,7 @@ const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://
 
 export async function analyzeCode(request: ReviewRequest): Promise<ReviewResult> {
   // Attach active provider credentials from local settings
-  const { provider, apiKey, model } = getActiveProviderSettings(loadSettings())
+  const { provider, apiKey, model } = getAgentSettings(loadSettings(), 'coder')
 
   const response = await fetch(`${API_BASE}/api/review`, {
     method: "POST",
@@ -66,7 +66,7 @@ export async function executeCode(request: ExecuteRequest): Promise<ExecuteResul
 // ─── Project Execution and Analysis ──────────────────────────────────────────
 
 export async function projectAnalyze(owner: string, repo: string, branch: string = "main", targetPath?: string | null) {
-  const { provider, apiKey, model } = getActiveProviderSettings(loadSettings())
+  const { provider, apiKey, model } = getAgentSettings(loadSettings(), 'coder')
   const response = await fetch(`${API_BASE}/api/project/${owner}/${repo}/analyze?branch=${branch}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -81,7 +81,7 @@ export async function projectAnalyze(owner: string, repo: string, branch: string
 }
 
 export async function projectRun(owner: string, repo: string, branch: string = "main") {
-  const { provider, apiKey, model } = getActiveProviderSettings(loadSettings())
+  const { provider, apiKey, model } = getAgentSettings(loadSettings(), 'coder')
   const response = await fetch(`${API_BASE}/api/project/${owner}/${repo}/run?branch=${branch}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -148,13 +148,36 @@ export async function createChatThread(owner: string, repo: string, title: strin
   return response.json()
 }
 
-export async function projectChat(owner: string, repo: string, threadId: string, message: string, branch: string = "main", targetPath?: string | null, attachments: string[] = []) {
-  const { provider, apiKey, model } = getActiveProviderSettings(loadSettings())
+export async function projectChat(owner: string, repo: string, threadId: string, message: string, branch: string = "main", targetPath?: string | null, attachments: string[] = [], agents?: any) {
+  const settings = loadSettings()
+  const plannerId = (agents?.planner || settings.agents.planner || "nvidia") as keyof typeof settings.providers
+  const coderId = (agents?.coder || settings.agents.coder || "groq") as keyof typeof settings.providers
+  const fallbackId = (agents?.fallback || settings.agents.fallback || "openrouter") as keyof typeof settings.providers
+
+  // Generate a structure representing the pipeline configuration with their respective API keys
+  const agentsConfig = {
+    planner: {
+      provider: plannerId,
+      apiKey: settings.providers[plannerId]?.apiKey || "",
+      model: settings.providers[plannerId]?.model || "meta/llama-3.1-70b-instruct"
+    },
+    coder: {
+      provider: coderId,
+      apiKey: settings.providers[coderId]?.apiKey || "",
+      model: settings.providers[coderId]?.model || "llama-3.3-70b-versatile"
+    },
+    fallback: {
+      provider: fallbackId,
+      apiKey: settings.providers[fallbackId]?.apiKey || "",
+      model: settings.providers[fallbackId]?.model || "anthropic/claude-3.5-sonnet"
+    }
+  }
+
   const response = await fetch(`${API_BASE}/api/project/${owner}/${repo}/chat/${threadId}?branch=${branch}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ provider, apiKey, model, targetPath, message, attachments }),
+    body: JSON.stringify({ agents: agentsConfig, targetPath, message, attachments }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: "Unknown error" }))

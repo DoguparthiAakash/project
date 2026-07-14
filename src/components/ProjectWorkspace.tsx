@@ -22,6 +22,7 @@ import { FileTree } from "@/components/FileTree"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { ghGetFile, projectPushFixes, projectChat, getChatThreads, createChatThread, getThreadHistory, clearChatHistory, type GHRepo } from "@/services/api"
 import { getWebContainer, mountRepoAndRun, writeFileToWebContainer } from "@/services/webcontainer"
+import { loadSettings } from "@/services/settings"
 import { writeFileToCheerpX } from "@/services/cheerpx"
 import { WebContainerTerminal } from "./WebContainerTerminal"
 import { ManualTerminal } from "./ManualTerminal"
@@ -37,6 +38,7 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   const branch = repo.default_branch
 
   // ─── State ─────────────────────────────────────────────────────────────
+  const settings = loadSettings()
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [openFiles, setOpenFiles] = useState<string[]>([])
   const [fileContent, setFileContent] = useState<string>("")
@@ -193,7 +195,7 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
     setChatMessages(prev => [...prev, userMessage])
 
     try {
-      const res = await projectChat(owner, repoName, currentThreadId, message, branch, selectedFilePath, attachmentsToSent)
+      const res = await projectChat(owner, repoName, currentThreadId, message, branch, selectedFilePath, attachmentsToSent, settings.agents)
       setChatMessages(prev => [...prev, { role: "assistant", content: res.message, fixes: res.fixes?.filter((f: any) => f.path !== "_command"), command: res.command }])
       
       // Auto-preview fixes if any

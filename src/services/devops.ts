@@ -1,5 +1,5 @@
 import { executeCommand } from './webcontainer';
-import { loadSettings, getActiveProviderSettings } from './settings';
+import { loadSettings, getAgentSettings } from './settings';
 
 // Simple heuristic error detection
 export function detectErrorInLogs(logLine: string): boolean {
@@ -40,7 +40,7 @@ Respond ONLY with a JSON object in this format:
 
   try {
     const settings = loadSettings();
-    const { provider, apiKey, model } = getActiveProviderSettings(settings);
+    const { provider, apiKey, model } = getAgentSettings(settings, 'coder');
 
     if (!apiKey) {
       console.warn("[DevOps Agent] No API key configured. Skipping analysis.");
