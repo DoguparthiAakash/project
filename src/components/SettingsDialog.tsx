@@ -389,7 +389,7 @@ export function SettingsDialog({ open, onClose, onSave }: SettingsDialogProps) {
           </div>
 
           {/* Tab content */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             {AI_PROVIDERS.map((p) => (
               <TabsContent key={p.id} value={p.id} className="m-0 px-6 py-5 focus-visible:outline-none">
                 <ProviderPanel
