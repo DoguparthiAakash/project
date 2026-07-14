@@ -26,8 +26,19 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
-      cb(new Error(`CORS: origin ${origin} not allowed`))
+      // Allow if no origin (e.g. curl), or if it matches allowedOrigins,
+      // or if it's a render deployment URL, or local network for testing
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".onrender.com") ||
+        origin.startsWith("http://localhost") ||
+        origin.startsWith("http://192.168")
+      ) {
+        return cb(null, true)
+      }
+      // Do not throw an error, just return false to omit CORS headers
+      cb(null, false)
     },
     credentials: true,
   })
