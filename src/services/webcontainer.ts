@@ -146,3 +146,20 @@ export async function executeCommand(
 
   return process.exit;
 }
+
+export async function writeFileToWebContainer(filePath: string, content: string) {
+  if (!isMounted) return;
+  try {
+    const wc = await getWebContainer();
+    // Path might contain directories that don't exist, but wc.fs.writeFile
+    // doesn't automatically create parent directories.
+    const parts = filePath.split('/');
+    if (parts.length > 1) {
+      const dir = parts.slice(0, -1).join('/');
+      await wc.fs.mkdir(dir, { recursive: true });
+    }
+    await wc.fs.writeFile(filePath, content);
+  } catch (err) {
+    console.warn(`Failed to write file ${filePath} to WebContainer`, err);
+  }
+}

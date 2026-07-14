@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileTree } from "@/components/FileTree"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { ghGetFile, projectPushFixes, projectChat, getChatThreads, createChatThread, getThreadHistory, clearChatHistory, type GHRepo } from "@/services/api"
-import { getWebContainer, mountRepoAndRun } from "@/services/webcontainer"
+import { getWebContainer, mountRepoAndRun, writeFileToWebContainer } from "@/services/webcontainer"
+import { writeFileToCheerpX } from "@/services/cheerpx"
 import { WebContainerTerminal } from "./WebContainerTerminal"
 import { ManualTerminal } from "./ManualTerminal"
 import { CheerpXTerminal } from "./CheerpXTerminal"
@@ -269,7 +270,7 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
       
       // Ensure we only bind this once, or clean it up if bound multiple times.
       // But for simplicity, we bind it here.
-      wc.on('server-ready', (_port, url) => {
+      wc.on('server-ready', (_port: number, url: string) => {
         setPreviewUrl(url)
         xtermRef.current?.writeln(`\r\n[Web Preview Ready at ${url}]`)
         toast.success("Web Preview Started")
@@ -377,12 +378,18 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
     }
   }
 
-  const handleAcceptFix = (path: string) => {
+  const handleAcceptFix = async (path: string) => {
     const newContent = previewFixes[path]
     if (newContent !== undefined) {
       setUnsavedChanges(prev => ({ ...prev, [path]: newContent }))
       if (selectedFilePath === path) {
         setFileContent(newContent)
+      }
+      try {
+        await writeFileToCheerpX(owner, repoName, path, newContent);
+        await writeFileToWebContainer(path, newContent);
+      } catch (e) {
+        console.warn("Failed to sync to VMs", e);
       }
     }
     handleRejectFix(path)
@@ -421,6 +428,14 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
       await projectPushFixes(owner, repoName, branch, `CodeSage: Manual save of ${selectedFilePath}`, [
         { path: selectedFilePath, content: fileContent }
       ])
+      
+      try {
+        await writeFileToCheerpX(owner, repoName, selectedFilePath, fileContent);
+        await writeFileToWebContainer(selectedFilePath, fileContent);
+      } catch (e) {
+        console.warn("Failed to sync to VMs", e);
+      }
+      
       toast.success("File saved successfully!")
       setUnsavedChanges(prev => {
         const next = { ...prev }
@@ -433,6 +448,7 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
       setSavingFile(false)
     }
   }
+
 
   const handleFileChange = (value: string | undefined) => {
     if (value !== undefined) {

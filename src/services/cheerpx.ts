@@ -76,3 +76,18 @@ export async function syncRepoToCheerpX(
 
   return `/home/user/workspace/${repo}`;
 }
+
+export async function writeFileToCheerpX(
+  owner: string,
+  repo: string,
+  filePath: string,
+  content: string
+) {
+  if (!cxInstance) return;
+  const b64 = btoa(unescape(encodeURIComponent(content)));
+  const fullPath = `/home/user/workspace/${repo}/${filePath}`;
+  await cxInstance.run('/bin/bash', [
+    '-c',
+    `mkdir -p "$(dirname "${fullPath}")" && echo "${b64}" | base64 -d > "${fullPath}"`
+  ]);
+}
