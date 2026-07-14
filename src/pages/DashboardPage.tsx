@@ -158,7 +158,7 @@ export default function DashboardPage() {
       {/* Top Navbar */}
       <header className="flex items-center px-6 py-4 gap-4 bg-card border-b border-border shadow-sm z-30">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="size-8 rounded-xl object-contain shadow-sm bg-background border border-border/50" />
+          <img src="/vite.svg" alt="Logo" className="size-8 rounded-xl object-contain shadow-sm bg-background border border-border/50" />
           <span className="font-bold text-lg tracking-tight">CodeSage</span>
           <Badge variant="outline" className="text-xs px-2 hidden sm:flex bg-primary/5 text-primary border-primary/20">
             {activeProviderMeta?.name.split(" ")[0] ?? "AI"} Platform
