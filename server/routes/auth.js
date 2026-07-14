@@ -86,7 +86,13 @@ router.get("/github", (req, res) => {
 // ─── 2. OAuth callback ────────────────────────────────────────────────────────
 router.get("/github/callback", async (req, res) => {
   const { code, state, error } = req.query
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173"
+  
+  const protocol = req.headers['x-forwarded-proto'] || (req.get('host')?.includes('localhost') ? 'http' : 'https')
+  const host = req.get('host')
+  // If not localhost, dynamically use the current host since frontend and backend share the same server
+  const clientUrl = host?.includes('localhost') 
+    ? (process.env.CLIENT_URL || "http://localhost:5173") 
+    : `${protocol}://${host}`
 
   const fail = (msg) =>
     res.redirect(`${clientUrl}/dashboard?auth_error=${encodeURIComponent(msg)}`)
