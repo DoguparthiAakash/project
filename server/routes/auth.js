@@ -74,15 +74,9 @@ router.get("/github", (req, res) => {
     path:     "/",
   })
 
-  const protocol = req.headers['x-forwarded-proto'] || (req.get('host')?.includes('localhost') ? 'http' : 'https')
-  const host = req.get('host')
-  const redirectUri = process.env.SERVER_URL 
-    ? `${process.env.SERVER_URL}/auth/github/callback`
-    : `${protocol}://${host}/auth/github/callback`
-    
   const url         = new URL(GITHUB_OAUTH_URL)
   url.searchParams.set("client_id",    clientId)
-  url.searchParams.set("redirect_uri", redirectUri)
+  // url.searchParams.set("redirect_uri", redirectUri) // omitted to let GitHub use the registered callback URL
   url.searchParams.set("scope",        "repo read:user user:email")
   url.searchParams.set("state",        state)
 
@@ -113,12 +107,6 @@ router.get("/github/callback", async (req, res) => {
 
   try {
     // ── Exchange code for access token ────────────────────────────────────────
-    const protocol = req.headers['x-forwarded-proto'] || (req.get('host')?.includes('localhost') ? 'http' : 'https')
-    const host = req.get('host')
-    const redirectUri = process.env.SERVER_URL 
-      ? `${process.env.SERVER_URL}/auth/github/callback`
-      : `${protocol}://${host}/auth/github/callback`
-
     const tokenRes = await fetch(GITHUB_TOKEN_URL, {
       method:  "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -126,7 +114,7 @@ router.get("/github/callback", async (req, res) => {
         client_id:     process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri:  redirectUri,
+        // redirect_uri omitted to match authorization request
       }),
     })
     const tokenData = await tokenRes.json()
