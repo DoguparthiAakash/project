@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import { Link } from "react-router-dom"
 import {
-  Code2, ArrowRight, Brain, Zap,
+  ArrowRight, Brain, Zap,
   Terminal, Package, ShieldCheck, CheckCircle2,
   ExternalLink, Sparkles
 } from "lucide-react"
@@ -78,9 +78,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2.5">
-              <div className="size-8 rounded-xl bg-primary flex items-center justify-center shadow-sm">
-                <Code2 className="size-4 text-primary-foreground" />
-              </div>
+              <img src="/logo.png" alt="Logo" className="size-8 rounded-xl object-contain shadow-sm" />
               <span className="font-bold text-lg tracking-tight">
                 AgentForge <span className="text-primary">AI</span>
               </span>
@@ -268,9 +266,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
-              <div className="size-7 rounded-lg bg-primary flex items-center justify-center">
-                <Code2 className="size-3.5 text-primary-foreground" />
-              </div>
+              <img src="/logo.png" alt="Logo" className="size-7 rounded-lg object-contain" />
               <span className="font-bold">AgentForge AI</span>
             </div>
 

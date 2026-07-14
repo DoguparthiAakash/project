@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import {
-  Code2, FolderOpen, Globe, Lock, Search, Star, GitBranch, RefreshCw, Settings, AlertCircle, Sparkles
+  FolderOpen, Globe, Lock, Search, Star, GitBranch, RefreshCw, Settings, AlertCircle, Sparkles
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -158,9 +158,7 @@ export default function DashboardPage() {
       {/* Top Navbar */}
       <header className="flex items-center px-6 py-4 gap-4 bg-card border-b border-border shadow-sm z-30">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Code2 className="size-4 text-primary" />
-          </div>
+          <img src="/logo.png" alt="Logo" className="size-8 rounded-xl object-contain shadow-sm bg-background border border-border/50" />
           <span className="font-bold text-lg tracking-tight">CodeSage</span>
           <Badge variant="outline" className="text-xs px-2 hidden sm:flex bg-primary/5 text-primary border-primary/20">
             {activeProviderMeta?.name.split(" ")[0] ?? "AI"} Platform
