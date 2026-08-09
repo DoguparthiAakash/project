@@ -19,13 +19,15 @@ export function GenerateProjectDialog({ open, onOpenChange, onSubmit, isSubmitti
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [techStack, setTechStack] = useState("React + Node.js")
+  const [customTechStack, setCustomTechStack] = useState("")
   const [prompt, setPrompt] = useState("")
   const [isPrivate, setIsPrivate] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !prompt) return
-    onSubmit({ name, description, techStack, prompt, isPrivate })
+    const finalTechStack = techStack === "Custom" ? customTechStack : techStack
+    onSubmit({ name, description, techStack: finalTechStack, prompt, isPrivate })
   }
 
   return (
@@ -88,13 +90,29 @@ export function GenerateProjectDialog({ open, onOpenChange, onSubmit, isSubmitti
               <SelectTrigger className="bg-background border-border focus:ring-primary/50 rounded-xl">
                 <SelectValue placeholder="Select a framework" />
               </SelectTrigger>
-              <SelectContent className="bg-popover border-border rounded-xl shadow-md">
+              <SelectContent className="bg-popover border-border rounded-xl shadow-md max-h-64">
                 <SelectItem value="React + Node.js (Express)" className="cursor-pointer rounded-md">React + Node.js (Express)</SelectItem>
                 <SelectItem value="Next.js + TypeScript + Tailwind" className="cursor-pointer rounded-md">Next.js + TypeScript + Tailwind</SelectItem>
                 <SelectItem value="Vue + Node.js (Express)" className="cursor-pointer rounded-md">Vue + Node.js (Express)</SelectItem>
+                <SelectItem value="SvelteKit + Tailwind" className="cursor-pointer rounded-md">SvelteKit + Tailwind</SelectItem>
+                <SelectItem value="Python (FastAPI) + React" className="cursor-pointer rounded-md">Python (FastAPI) + React</SelectItem>
+                <SelectItem value="Python (Django) + React" className="cursor-pointer rounded-md">Python (Django) + React</SelectItem>
+                <SelectItem value="Go + React" className="cursor-pointer rounded-md">Go + React</SelectItem>
+                <SelectItem value="Rust (Actix/Rocket) + React" className="cursor-pointer rounded-md">Rust (Actix/Rocket) + React</SelectItem>
+                <SelectItem value="Ruby on Rails + Hotwire" className="cursor-pointer rounded-md">Ruby on Rails + Hotwire</SelectItem>
                 <SelectItem value="Vanilla HTML/JS/CSS" className="cursor-pointer rounded-md">Vanilla HTML/JS/CSS</SelectItem>
+                <SelectItem value="Custom" className="cursor-pointer rounded-md font-medium text-primary">Custom (Specify below)</SelectItem>
               </SelectContent>
             </Select>
+            {techStack === "Custom" && (
+              <Input
+                placeholder="e.g. Flutter + Firebase, or Elixir Phoenix"
+                value={customTechStack}
+                onChange={(e) => setCustomTechStack(e.target.value)}
+                required
+                className="mt-2 bg-background border-border focus-visible:ring-primary/50 rounded-xl"
+              />
+            )}
           </div>
 
           <div className="space-y-2">
@@ -102,7 +120,7 @@ export function GenerateProjectDialog({ open, onOpenChange, onSubmit, isSubmitti
             <Textarea
               id="prompt"
               placeholder="Describe the modules, data schemas, API routes, or specific interface components you require..."
-              className="min-h-[120px] bg-background border-border focus-visible:ring-primary/50 custom-scrollbar resize-none rounded-xl"
+              className="h-[120px] max-h-[120px] overflow-y-auto bg-background border-border focus-visible:ring-primary/50 custom-scrollbar resize-none rounded-xl block [field-sizing:fixed]"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               required
