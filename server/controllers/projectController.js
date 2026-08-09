@@ -252,15 +252,29 @@ export async function handleChatProject(req, res) {
 
       const limitedFilesPaths = filesToFetch.slice(0, targetPath ? 30 : 30)
       const fetchedFiles = []
-      for (const file of limitedFilesPaths) {
-        try {
-          const data = await getFileContent(token, owner, repo, file.path, branch || "main")
-          fetchedFiles.push({ path: file.path, content: data.content })
-        } catch (e) {}
+      
+      // Fetch in parallel in batches of 5 to avoid rate limits
+      for (let i = 0; i < limitedFilesPaths.length; i += 5) {
+        const batch = limitedFilesPaths.slice(i, i + 5)
+        const batchResults = await Promise.all(batch.map(async file => {
+          try {
+            const data = await getFileContent(token, owner, repo, file.path, branch || "main")
+            return { path: file.path, content: data.content }
+          } catch (e) {
+            return null
+          }
+        }))
+        fetchedFiles.push(...batchResults.filter(Boolean))
       }
 
       // Use Semantic Search to find the 5 most relevant files to the user's query
-      const relevantFiles = await findRelevantFiles(message, fetchedFiles, 5)
+      let relevantFiles = []
+      try {
+        relevantFiles = await findRelevantFiles(message || "code", fetchedFiles, 5)
+      } catch (err) {
+        console.error("Semantic search failed, falling back to top 5 files:", err)
+        relevantFiles = fetchedFiles.slice(0, 5)
+      }
       
       for (const file of relevantFiles) {
         projectContext += `\n--- File: ${file.path} ---\n${file.content}\n`
