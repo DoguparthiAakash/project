@@ -101,7 +101,7 @@ Requirements: ${prompt}
 Generate a full foundational project structure.`
 
     const files = await generateProjectWorkspace(fullPrompt, {
-      fallbackProviders: fallbackProviders || [{ provider: payload.aiProvider, apiKey: payload.aiKey, model: payload.aiModel }],
+      fallbackProviders: (fallbackProviders && fallbackProviders.length > 0) ? fallbackProviders : [{ provider: payload.aiProvider, apiKey: payload.aiKey, model: payload.aiModel }],
       onProgress: (msg) => { task.statusMessage = msg }
     })
 
