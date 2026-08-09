@@ -1,82 +1,100 @@
 import { getProviderAdapter } from "./gitProviderService.js"
 import { getGitToken } from "./supabaseService.js"
 import { generateReview, generateProjectWorkspace } from "./aiService.js"
+import { Queue, Worker } from "bullmq"
+import Redis from "ioredis"
 
-const taskQueue = []
-let isProcessing = false
+// Render provides REDIS_URL when a Redis instance is attached
+// Fallback to local docker-compose redis for development
+const redisUrl = process.env.REDIS_URL || "redis://localhost:6379"
 
-export function enqueueTask(task) {
-  task.id = Date.now().toString()
-  task.status = "queued"
-  taskQueue.push(task)
-  
-  if (!isProcessing) {
-    processQueue()
-  }
-  
-  return task.id
+const connection = new Redis(redisUrl, {
+  maxRetriesPerRequest: null // Required by bullmq
+})
+
+export const agentQueue = new Queue('agentTasks', { connection })
+
+export async function enqueueTask(task) {
+  // Adding job to bullmq
+  const job = await agentQueue.add(task.type, task)
+  return job.id
 }
 
-export function getTaskStatus(id) {
-  return taskQueue.find(t => t.id === id) || null
+export async function getTaskStatus(id) {
+  const job = await agentQueue.getJob(id)
+  if (!job) return null
+
+  const isCompleted = await job.isCompleted()
+  const isFailed = await job.isFailed()
+  const isActive = await job.isActive()
+
+  let status = "queued"
+  if (isActive) status = "processing"
+  if (isCompleted) status = "completed"
+  if (isFailed) status = "failed"
+
+  return {
+    id: job.id,
+    userId: job.data.userId,
+    type: job.data.type,
+    status,
+    statusMessage: job.progress || "",
+    result: job.returnvalue || null,
+    error: job.failedReason || null,
+    data: job.data
+  }
 }
 
-export function getAllTasks() {
-  return taskQueue
+export async function getAllTasks(userId) {
+  // We can fetch recent jobs and filter by userId
+  const jobs = await agentQueue.getJobs(['waiting', 'active', 'completed', 'failed'])
+  
+  const tasks = await Promise.all(jobs
+    .filter(job => job.data.userId === userId)
+    .map(async job => {
+      const isCompleted = await job.isCompleted()
+      const isFailed = await job.isFailed()
+      const isActive = await job.isActive()
+      let status = "queued"
+      if (isActive) status = "processing"
+      if (isCompleted) status = "completed"
+      if (isFailed) status = "failed"
+      return {
+        id: job.id,
+        userId: job.data.userId,
+        type: job.data.type,
+        status,
+        statusMessage: job.progress || "",
+        result: job.returnvalue || null,
+        error: job.failedReason || null,
+        data: job.data
+      }
+    }))
+    
+  return tasks
 }
 
-async function processQueue() {
-  if (taskQueue.length === 0) {
-    isProcessing = false
-    return
-  }
-  
-  isProcessing = true
-  const task = taskQueue.find(t => t.status === "queued")
-  
-  if (!task) {
-    isProcessing = false
-    return
-  }
-  
-  task.status = "processing"
-  
-  try {
-    await runAgentTask(task)
-    task.status = "completed"
-  } catch (err) {
-    console.error("Agent task failed:", err)
-    task.status = "failed"
-    task.error = err.message
-  }
-  
-  // Process next
-  processQueue()
-}
-
-async function runAgentTask(task) {
-  const { type, provider, userId, payload } = task
+// Set up Worker
+const worker = new Worker('agentTasks', async (job) => {
+  const { type, provider, userId, payload } = job.data
   
   const token = await getGitToken(userId, provider)
   const adapter = getProviderAdapter(provider)
   
   if (type === "generate_readme") {
     const { owner, repo, branch } = payload
-    // Fetch repo tree
     const tree = await adapter.getRepoTree(token, owner, repo, branch || "main")
-    
-    // Simplistic analysis (would typically pull files, but doing file tree for now)
     const files = tree.tree.map(t => t.path).join("\\n")
-    
     const prompt = `You are an AI developer. Write a comprehensive README.md for a GitHub repository with these files:\n${files}\n\nReturn ONLY the markdown content for the README.`
     
+    await job.updateProgress("Generating README...")
     const aiResponse = await generateReview(prompt, {
       provider: payload.aiProvider,
       apiKey: payload.aiKey,
       model: payload.aiModel,
     })
     
-    // Commit back
+    await job.updateProgress("Committing README...")
     await adapter.commitFile({
       token,
       owner,
@@ -86,13 +104,15 @@ async function runAgentTask(task) {
       content: aiResponse,
       branch: branch || "main"
     })
+    return { success: true }
     
   } else if (type === "analyze_code") {
     // Other workloads...
+    return { success: true }
   } else if (type === "generate_new_project") {
     const { name, description, isPrivate, prompt, techStack, fallbackProviders } = payload
     
-    task.statusMessage = "Generating code with AI..."
+    await job.updateProgress("Generating code with AI...")
     
     const fullPrompt = `Project Name: ${name}
 Description: ${description}
@@ -102,16 +122,14 @@ Generate a full foundational project structure.`
 
     const files = await generateProjectWorkspace(fullPrompt, {
       fallbackProviders: (fallbackProviders && fallbackProviders.length > 0) ? fallbackProviders : [{ provider: payload.aiProvider, apiKey: payload.aiKey, model: payload.aiModel }],
-      onProgress: (msg) => { task.statusMessage = msg }
+      onProgress: async (msg) => { await job.updateProgress(msg) }
     })
 
-    task.statusMessage = "Creating remote repository..."
-    // Create the repo
+    await job.updateProgress("Creating remote repository...")
     const repo = await adapter.createRepo(token, { name, description, private: isPrivate })
     const owner = repo.owner.login
 
-    task.statusMessage = "Pushing generated files..."
-    // Push the files
+    await job.updateProgress("Pushing generated files...")
     await adapter.commitMultipleFiles({
       token,
       owner,
@@ -121,10 +139,12 @@ Generate a full foundational project structure.`
       changes: files
     })
 
-    // Store the resulting repo info so frontend can route to it
-    task.result = { owner, repo: repo.name }
-
+    return { owner, repo: repo.name }
   } else {
     throw new Error("Unknown task type")
   }
-}
+}, { connection })
+
+worker.on('failed', (job, err) => {
+  console.error(`Agent task ${job.id} failed:`, err)
+})

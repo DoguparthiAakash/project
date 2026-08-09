@@ -10,6 +10,7 @@ import {
   clearChatHistory, 
   saveChatMessage 
 } from "../services/supabaseService.js"
+import { findRelevantFiles } from "../services/semanticSearch.js"
 
 async function getToken(req) {
   const userId = req.userId
@@ -249,12 +250,20 @@ export async function handleChatProject(req, res) {
         return true
       })
 
-      const limitedFiles = filesToFetch.slice(0, targetPath ? 10 : 5)
-      for (const file of limitedFiles) {
+      const limitedFilesPaths = filesToFetch.slice(0, targetPath ? 30 : 30)
+      const fetchedFiles = []
+      for (const file of limitedFilesPaths) {
         try {
           const data = await getFileContent(token, owner, repo, file.path, branch || "main")
-          projectContext += `\n--- File: ${file.path} ---\n${data.content}\n`
+          fetchedFiles.push({ path: file.path, content: data.content })
         } catch (e) {}
+      }
+
+      // Use Semantic Search to find the 5 most relevant files to the user's query
+      const relevantFiles = await findRelevantFiles(message, fetchedFiles, 5)
+      
+      for (const file of relevantFiles) {
+        projectContext += `\n--- File: ${file.path} ---\n${file.content}\n`
       }
     }
 
