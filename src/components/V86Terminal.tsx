@@ -15,7 +15,7 @@ export function V86Terminal({ onReady }: V86TerminalProps) {
   const screenRef = useRef<HTMLDivElement>(null);
   const emulatorRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
-  const [bootStatus, setBootStatus] = useState("Initializing WebAssembly runtime...");
+  const [bootStatus, setBootStatus] = useState("Initializing Linux VM runtime...");
 
   useEffect(() => {
     if (!screenRef.current) return;
@@ -24,7 +24,7 @@ export function V86Terminal({ onReady }: V86TerminalProps) {
     const script = document.createElement("script");
     script.src = "/v86/libv86.js";
     script.onload = () => {
-      setBootStatus("Booting Linux...");
+      setBootStatus("Booting Linux VM...");
       
       const emulator = new window.V86Starter({
         wasm_path: "/v86/v86.wasm",
@@ -48,6 +48,7 @@ export function V86Terminal({ onReady }: V86TerminalProps) {
       });
 
       emulator.add_listener("emulator-ready", () => {
+        setBootStatus("Linux VM — Ready");
         setLoading(false);
         if (onReady) onReady();
       });

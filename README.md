@@ -61,6 +61,10 @@ cp .env.example .env
 
 ```env
 VITE_API_URL=http://localhost:3001
+VITE_V86_ASSET_BASE=https://cdn.jsdelivr.net/gh/copy/v86@master/build
+VITE_V86_LINUX_IMAGE=https://raw.githubusercontent.com/copy/v86/master/images/linux3.iso
+VITE_V86_EXEC_TIMEOUT=120000
+VITE_V86_PROJECT_PATH=/workspace/project
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
@@ -165,6 +169,8 @@ The repo includes `render.yaml` for one-click deployment to [Render](https://ren
 
 Build command: `npm install && npm run build && cd server && npm install`  
 Start command: `cd server && node index.js`
+
+For the v86 VM in Render, keep the V86 asset URLs public and browser-accessible. Do not point the browser at local disk paths or private files. The default CDN configuration above is valid for Render deployments.
 
 ---
 

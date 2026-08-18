@@ -11,6 +11,7 @@
     "build": "vite build",
     "build:check": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
     "preview": "vite preview",
     "start": "node server/index.js"
   },

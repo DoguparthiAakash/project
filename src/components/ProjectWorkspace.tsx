@@ -26,7 +26,7 @@ import { loadSettings } from "@/services/settings"
 import { writeFileToCheerpX } from "@/services/cheerpx"
 import { WebContainerTerminal } from "./WebContainerTerminal"
 import { ManualTerminal } from "./ManualTerminal"
-import { CheerpXTerminal } from "./CheerpXTerminal"
+import { V86Terminal } from "./V86Terminal"
 
 interface ProjectWorkspaceProps {
   repo: GHRepo
@@ -803,7 +803,7 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
                   <TabsList className="w-full justify-start rounded-none bg-muted/50 border-b border-border h-10 p-0 overflow-x-auto overflow-y-hidden">
                     <TabsTrigger value="server" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Server Logs</TabsTrigger>
                     <TabsTrigger value="manual" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Manual Terminal</TabsTrigger>
-                    <TabsTrigger value="cheerpx" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">WebVM (Linux)</TabsTrigger>
+                    <TabsTrigger value="linux-vm" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Linux VM</TabsTrigger>
                     {previewUrl && (
                       <TabsTrigger value="preview" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:text-blue-500 h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Web Preview</TabsTrigger>
                     )}
@@ -813,8 +813,8 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
                     <WebContainerTerminal owner={owner} repo={repoName} branch={branch} />
                   </TabsContent>
 
-                  <TabsContent value="cheerpx" className="flex-1 p-0 m-0 overflow-hidden flex flex-col relative bg-zinc-950">
-                    <CheerpXTerminal owner={owner} repo={repoName} branch={branch} />
+                  <TabsContent value="linux-vm" className="flex-1 p-0 m-0 overflow-hidden flex flex-col relative bg-zinc-950">
+                    <V86Terminal onReady={() => {}} />
                   </TabsContent>
 
                   <TabsContent value="manual" className="flex-1 p-0 m-0 overflow-hidden flex flex-col relative bg-zinc-950">

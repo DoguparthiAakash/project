@@ -37,6 +37,21 @@ services:
       - key: VITE_API_URL
         value: ""
 
+      # Browser-side v86 runtime loads its BIOS/WASM/Linux image from public URLs.
+      # These must be fetchable from the browser on Render, so use CDN URLs rather
+      # than local filesystem paths that won't exist in production.
+      - key: VITE_V86_ASSET_BASE
+        value: https://cdn.jsdelivr.net/gh/copy/v86@master/build
+
+      - key: VITE_V86_LINUX_IMAGE
+        value: https://raw.githubusercontent.com/copy/v86/master/images/linux3.iso
+
+      - key: VITE_V86_EXEC_TIMEOUT
+        value: "120000"
+
+      - key: VITE_V86_PROJECT_PATH
+        value: /workspace/project
+
       # ── Supabase ─────────────────────────────────────────────────
       - key: SUPABASE_URL
         sync: false       # paste value in Render dashboard
