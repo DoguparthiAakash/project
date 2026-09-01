@@ -91,7 +91,7 @@ export async function generateWithAnthropic(prompt, { apiKey, model } = {}) {
 
 export async function generateWithGroq(prompt, { apiKey, model } = {}) {
   const key   = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
-  const mdl   = model || "llama-3.3-70b-versatile"
+  const mdl   = model || "llama-3.1-8b-instant"
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
   const res = await client.chat.completions.create({
     model: mdl,
@@ -453,7 +453,7 @@ export async function chatWithAnthropic(messages, { apiKey, model } = {}) {
 
 export async function chatWithGroq(messages, { apiKey, model } = {}) {
   const key   = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
-  const mdl   = model || "llama-3.3-70b-versatile"
+  const mdl   = model || "llama-3.1-8b-instant"
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
 
   // Groq's default model does not support vision, strip attachments

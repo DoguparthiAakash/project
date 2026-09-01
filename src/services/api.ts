@@ -164,7 +164,7 @@ export async function projectChat(owner: string, repo: string, threadId: string,
     coder: {
       provider: coderId,
       apiKey: settings.providers[coderId]?.apiKey || "",
-      model: settings.providers[coderId]?.model || "llama-3.3-70b-versatile"
+      model: settings.providers[coderId]?.model || "llama-3.1-8b-instant"
     },
     fallback: {
       provider: fallbackId,

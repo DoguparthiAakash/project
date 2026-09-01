@@ -12,12 +12,12 @@ export const AI_PROVIDERS: AIProvider[] = [
     keyPlaceholder: "gsk_...",
     badge: "Recommended",
     models: [
-      { value: "llama-3.3-70b-versatile",       label: "Llama 3.3 70B Versatile" },
       { value: "llama-3.1-8b-instant",          label: "Llama 3.1 8B Instant (fastest)" },
+      { value: "llama-3.3-70b-versatile",       label: "Llama 3.3 70B Versatile" },
       { value: "mixtral-8x7b-32768",            label: "Mixtral 8x7B" },
       { value: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 70B" },
     ],
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "llama-3.1-8b-instant",
   },
   {
     id: "openai",
