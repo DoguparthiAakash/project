@@ -1,0 +1,682 @@
+================================================================================
+                         CODESAGE AI — FULL PROJECT BRIEF
+================================================================================
+Generated: 2026-09-01
+Project Root: e:\project\project
+Server Version: 3.0.0
+Frontend Package: codesage-ai-frontend v0.0.1
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. WHAT IS THIS PROJECT?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CodeSage AI is a full-stack, AI-powered code review and project scaffolding
+platform. It combines:
+
+  • A rich Monaco-based IDE workspace in the browser
+  • AI-driven code review with severity scores and fix suggestions
+  • A 3-agent pipeline that generates entire project repositories from a prompt
+  • A persistent AI chat assistant with semantic search over any GitHub repo
+  • GitHub OAuth integration for browsing, committing, and managing repos
+  • In-browser code execution via WebContainers, CheerpX, and v86
+
+The UI was originally named "AgentForge AI" on the landing page (LandingPage.tsx)
+while the backend/package still identifies the product as "CodeSage AI".
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. THE CORE PROBLEM IT SOLVES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem 1 — Code review is slow and inconsistent.
+  Traditional code reviews depend on human bandwidth. CodeSage submits any
+  code snippet or GitHub file to an AI provider and gets back structured
+  feedback: a numeric score (0–10), tagged issues (bug / security /
+  improvement), severity levels, and concrete suggested fixes — in seconds.
+
+Problem 2 — Project bootstrapping is tedious and error-prone.
+  Starting a new project requires wiring together package.json, configs,
+  source files, and deployment scripts. CodeSage's 3-agent pipeline (see §6)
+  does this autonomously and pushes the result directly to a new GitHub repo.
+
+Problem 3 — Context switching between editor, terminal, and AI chat.
+  Developers waste time copying code into ChatGPT, waiting for a response,
+  then manually applying changes. CodeSage integrates a Monaco editor, an
+  in-browser terminal, and a persistent AI chat that can read your repo,
+  suggest fixes, and apply them to files in one click.
+
+Problem 4 — Vendor lock-in to a single AI provider.
+  Rate limits, outages, or cost overruns from one provider block work.
+  CodeSage has a 7-provider fallback chain so that if one fails, the next
+  automatically picks up without user intervention.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. TECH STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─── FRONTEND ───────────────────────────────────────────────────────────────────
+
+  Framework      : React 19 (react@^19.2.4)
+  Language       : TypeScript ~5.9.3
+  Build Tool     : Vite 7.3.1 + @vitejs/plugin-react
+  CSS            : Tailwind CSS v4 (@tailwindcss/vite@^4.2.1)
+  UI Components  : shadcn/ui built on Radix UI (radix-ui@^1.4.3)
+  Icons          : Lucide React (lucide-react@^1.6.0)
+  Animations     : Framer Motion (framer-motion@^12.42.2)
+  Code Editor    : Monaco Editor (@monaco-editor/react@^4.7.0)
+  Routing        : React Router DOM v7 (react-router-dom@^7.18.1)
+  State / Forms  : React Hook Form + Zod validation
+  Charts         : Recharts
+  Theming        : next-themes (dark/light mode toggle)
+  Toasts         : Sonner
+  DB Client      : @supabase/supabase-js@^2.49.8 (anon key, client-side)
+
+  In-browser Runtimes (for code execution):
+    • @webcontainer/api@^1.6.4  — StackBlitz WebContainers (Node.js in browser)
+    • @leaningtech/cheerpx@^1.3.5 — CheerpX (x86 Linux emulation in WASM)
+    • v86@^0.5.424             — x86 PC emulator (boots Linux ISO in browser)
+    • @xterm/xterm + @xterm/addon-fit — Terminal UI for in-browser shells
+
+─── BACKEND ────────────────────────────────────────────────────────────────────
+
+  Runtime        : Node.js >= 18 (ES Modules, --dns-result-order=ipv4first)
+  Framework      : Express 4.19.2
+  Auth Middleware: jsonwebtoken (JWT cookies) + cookie-parser
+  Sessions       : express-session (OAuth CSRF state only)
+  HTTP Client    : node-fetch@^3.3.2
+  Queue System   : BullMQ@^6.0.9 (Redis-backed job queue)
+  Redis Client   : ioredis@^6.0.0
+  CORS           : cors@^2.8.5
+  Config         : dotenv@^16.4.5
+
+  AI Provider SDKs:
+    • openai@^4.67.3           — OpenAI GPT + Groq + xAI Grok + NVIDIA NIM
+                                  + OpenRouter (all OpenAI-compatible)
+    • @anthropic-ai/sdk@^0.110 — Anthropic Claude
+    • @google/generative-ai@^0.24.1 — Google Gemini
+
+  Semantic Search:
+    • @xenova/transformers@^2.17.2 — Runs all-MiniLM-L6-v2 locally on the
+                                     server for cosine-similarity file ranking
+
+─── DATABASE & AUTH ────────────────────────────────────────────────────────────
+
+  Database       : Supabase (PostgreSQL) — hosted at supabase.com
+  Auth Strategy  : GitHub OAuth 2.0 → JWT httpOnly cookie
+  Admin Access   : SERVICE_ROLE key (bypasses Row Level Security)
+  Client Access  : ANON key (frontend Supabase client, RLS enforced)
+
+─── DEPLOYMENT ─────────────────────────────────────────────────────────────────
+
+  Platform       : Render (render.yaml provided for one-click deployment)
+  Region         : Oregon (us-west)
+  Plan           : Free tier
+  Build Command  : npm install --include=dev && npm run build && cd server && npm install
+  Start Command  : npm start (→ node server/index.js)
+  Redis          : Render Redis add-on (REDIS_URL env var)
+  Static Files   : Express serves /dist folder in production
+  Dev (Windows)  : start.bat (backend :3001, frontend :5173)
+  Dev (manual)   : cd server && npm run dev  +  npm run dev (Vite)
+
+  Docker: docker-compose.yml included for local Redis.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. AUTHENTICATION FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The entire auth system lives in server/routes/auth.js.
+The raw GitHub access token NEVER leaves the server.
+
+Step-by-step OAuth flow:
+
+  1. User clicks "Login with GitHub" → frontend redirects to GET /auth/github
+  2. Server generates a CSRF state token (signed JWT, 10min TTL), stores it as
+     an httpOnly cookie "oauth_state", then redirects browser to:
+       https://github.com/login/oauth/authorize
+       ?client_id=GITHUB_CLIENT_ID
+       &scope=repo+read:user+user:email
+       &state=<random>
+  3. GitHub redirects back to GET /auth/github/callback?code=...&state=...
+  4. Server validates CSRF state cookie vs query param (prevents CSRF attacks)
+  5. Server POSTs to https://github.com/login/oauth/access_token
+     to exchange the one-time code for a GitHub access_token
+  6. Server fetches /user and /user/emails from GitHub API using the token
+  7. Server UPSERTs user row into Supabase git_profiles table
+     (user_id, provider='github', login, name, avatar, email, token, scope)
+  8. Server issues its own JWT (7d expiry), stores it as httpOnly cookie
+     named "codesage_token", then redirects browser to /dashboard?auth_success=1
+  9. All subsequent requests carry "codesage_token" cookie automatically.
+     The Express JWT middleware decodes it and attaches req.userId.
+
+Additional auth endpoints:
+  • GET  /auth/me     — verify cookie, return safe profile (no raw token)
+  • POST /auth/logout — clear codesage_token cookie
+  • POST /auth/pat    — save a Personal Access Token for GitLab/Bitbucket/Codeberg
+
+Security notes:
+  • Cookies are httpOnly (JS cannot read them)
+  • In production: Secure=true, SameSite=none (cross-origin safe on Render)
+  • In development: SameSite=lax (http localhost)
+  • JWT secret is a 64-char random hex string (JWT_SECRET env var)
+  • GitHub token stored server-side only (never sent to frontend)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. DATABASE SCHEMA (Supabase / PostgreSQL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All schema lives in supabase-setup.sql (run once in Supabase SQL Editor).
+
+TABLE: public.git_profiles
+  ─────────────────────────────────────────────────────────────────────────
+  user_id       TEXT NOT NULL          — Primary user ID (GitHub numeric ID as text)
+  provider      TEXT NOT NULL          — 'github' | 'gitlab' | 'bitbucket' | 'codeberg'
+  provider_id   TEXT                   — User ID on that specific platform
+  login         TEXT                   — Username / login handle
+  name          TEXT                   — Display name
+  avatar        TEXT                   — Avatar URL
+  email         TEXT                   — Email address
+  token         TEXT NOT NULL          — OAuth access token or PAT (encrypted at rest by Supabase)
+  token_scope   TEXT DEFAULT ''        — OAuth scope string
+  created_at    TIMESTAMPTZ DEFAULT now()
+  updated_at    TIMESTAMPTZ DEFAULT now()
+  PRIMARY KEY   (user_id, provider)    — Composite key: one row per user per provider
+  ─────────────────────────────────────────────────────────────────────────
+  AUTO-TRIGGER: set_updated_at() fires BEFORE UPDATE to keep updated_at fresh.
+  RLS: ENABLED (service role bypasses, anon/client cannot read raw tokens).
+
+TABLE: public.chat_threads
+  ─────────────────────────────────────────────────────────────────────────
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id       TEXT NOT NULL          — References git_profiles.user_id
+  owner         TEXT NOT NULL          — GitHub org/user that owns the repo
+  repo          TEXT NOT NULL          — Repository name
+  title         TEXT NOT NULL DEFAULT 'New Chat'
+  created_at    TIMESTAMPTZ DEFAULT now() NOT NULL
+  updated_at    TIMESTAMPTZ DEFAULT now() NOT NULL
+  INDEX: idx_chat_threads_user_repo ON (user_id, owner, repo)
+  AUTO-TRIGGER: set_updated_at() on update.
+  ─────────────────────────────────────────────────────────────────────────
+
+TABLE: public.chat_history
+  ─────────────────────────────────────────────────────────────────────────
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  thread_id     UUID REFERENCES chat_threads(id) ON DELETE CASCADE
+  user_id       TEXT NOT NULL
+  owner         TEXT NOT NULL
+  repo          TEXT NOT NULL
+  role          TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system'))
+  content       TEXT NOT NULL          — Message body
+  fixes         JSONB DEFAULT '[]'     — Array of {path, content} AI-suggested file changes
+  attachments   JSONB DEFAULT '[]'     — Array of base64 image strings (vision inputs)
+  created_at    TIMESTAMPTZ DEFAULT now() NOT NULL
+  INDEX: idx_chat_history_thread ON (thread_id, created_at)
+  ─────────────────────────────────────────────────────────────────────────
+
+Row Level Security:
+  All three tables have RLS ENABLED.
+  The backend uses SUPABASE_SERVICE_ROLE_KEY which bypasses all RLS policies.
+  No client-side policies defined — direct client access to raw tokens is blocked.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. AI PROVIDERS & FALLBACK CHAIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Provider    | Env Variable        | Default Model                  | Protocol
+───────────────────────────────────────────────────────────────────────────────
+Groq        | GROQ_API_KEY        | llama-3.3-70b-versatile        | OpenAI-compat
+xAI Grok    | XAI_API_KEY         | grok-3-mini                    | OpenAI-compat
+Google Gemini | GEMINI_API_KEY    | gemini-2.0-flash               | Native SDK
+OpenAI      | OPENAI_API_KEY      | gpt-4o-mini                    | OpenAI SDK
+Anthropic   | ANTHROPIC_API_KEY   | claude-3-5-haiku-20241022      | Anthropic SDK
+NVIDIA NIM  | NVIDIA_API_KEY      | meta/llama-3.1-70b-instruct    | OpenAI-compat
+OpenRouter  | OPENROUTER_API_KEY  | anthropic/claude-3.5-sonnet    | OpenAI-compat
+
+Auto-fallback order (if primary provider fails or hits rate limit):
+  1. Groq → 2. xAI Grok → 3. Gemini → 4. OpenAI → 5. Anthropic → 6. NVIDIA NIM → 7. OpenRouter
+
+Priority: User-supplied API key (from Settings dialog, stored in localStorage)
+          takes precedence over server-side environment variables.
+
+Key management:
+  • Server env vars: shared fallback, apply to all users
+  • Per-user keys: entered in the Settings panel, stored in localStorage,
+    sent in each request body, NEVER stored server-side
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. 3-AGENT PROJECT SCAFFOLDING PIPELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Defined in: server/services/aiService.js → generateProjectWorkspace()
+Triggered via: BullMQ agent queue (server/services/agentQueue.js)
+
+When a user submits a "Generate New Project" request, three sequential AI calls
+are made:
+
+  Agent 1 — Dependency & Configuration Manager
+    Input : Project name, description, tech stack, user prompt
+    Task  : Generate ALL configuration files ONLY — package.json, tsconfig.json,
+            .env.example, vite.config, webpack.config, etc.
+    Output: { "files": [{ "path": "package.json", "content": "..." }] }
+
+  Agent 2 — Code Architect / Developer
+    Input : User prompt + list of files Agent 1 already created
+    Task  : Write ALL application source code — components, services, routes,
+            controllers. NO configuration files.
+    Output: { "files": [{ "path": "src/App.tsx", "content": "..." }] }
+
+  Agent 3 — Verifier & Fixer
+    Input : List of all files from Agent 1 + Agent 2 combined
+    Task  : Review for correctness, missing imports, consistency. Return ONLY
+            files that need to be fixed or are missing. Return { "files": [] }
+            if everything is correct.
+    Output: { "files": [...fixed or new files...] }
+
+  Final Merge:
+    Combined files → Agent 3 overrides → unique file map → final file set
+
+  After generation:
+    1. Create a new GitHub repo via GitHub API
+    2. Push all generated files as an initial commit
+    3. Return { owner, repo } to the user
+
+  Progress updates: BullMQ job.updateProgress() streams status strings like
+    "Agent 1: Managing dependencies...", "Agent 2: Writing source code...", etc.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. 3-AGENT CHAT PIPELINE (In-Repo AI Chat)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Defined in: server/controllers/projectController.js → handleChatProject()
+
+When a user chats about a repo, a 3-agent pipeline runs:
+
+  Step 1 — Fetch codebase context
+    • Fetch repo tree via GitHub API
+    • Filter out binaries, node_modules, .git, dist, etc.
+    • Fetch up to 30 files' content in parallel batches of 5
+    • Run semantic search (Xenova all-MiniLM-L6-v2) to find the 5 most relevant
+      files for the user's query using cosine similarity
+
+  Step 2 — Planner Agent
+    • Provider: configured in settings (default: NVIDIA)
+    • Task: Analyze the request and produce a step-by-step plan. No code yet.
+
+  Step 3 — Coder Agent
+    • Provider: configured in settings (default: Groq)
+    • Receives: planner output + codebase context + chat history
+    • Produces JSON: { "message": "...", "command": "...", "fixes": [...] }
+    • Fallback: if Coder fails → Fallback Agent (default: OpenRouter)
+
+  Step 4 — Persist to database
+    • Save user message to chat_history
+    • Save assistant response to chat_history (with fixes + command)
+    • Thread updated_at timestamp updated
+
+  Fixes format: [{ "path": "src/App.tsx", "content": "<full file content>" }]
+  Command field: a shell command to run in the in-browser terminal
+  Attachments: base64 images for vision-capable providers (OpenAI, Anthropic, Gemini)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. SEMANTIC SEARCH ENGINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Defined in: server/services/semanticSearch.js
+
+Uses @xenova/transformers running the all-MiniLM-L6-v2 model (~90MB) locally
+on the Express server (no external embedding API needed).
+
+  • Model cached in server/.cache/ directory
+  • Generates 384-dimensional sentence embeddings
+  • Query: user's chat message
+  • Documents: file path + first 1500 chars of content per file
+  • Ranking: cosine similarity, descending
+  • Returns: top K (default 5) most relevant files
+
+This is how the chat agent knows WHICH files to include in the AI context window
+instead of blindly sending all repo files.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. AGENT TASK QUEUE (BullMQ + Redis)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Defined in: server/services/agentQueue.js
+
+Redis connection: process.env.REDIS_URL || "redis://localhost:6379"
+Queue name: "agentTasks"
+
+Supported task types:
+  generate_readme      — Auto-generate README.md for a GitHub repo and commit it
+  analyze_code         — (stub) Analyze a codebase
+  generate_new_project — Full 3-agent scaffolding + GitHub push (see §7)
+
+API endpoints (server/routes/agent.js):
+  POST /api/agent/workload   — Enqueue a new task, returns job ID
+  GET  /api/agent/tasks      — List all tasks for current user
+  GET  /api/agent/tasks/:id  — Get status/result of specific task
+
+Task lifecycle states: queued → processing → completed | failed
+Results accessible via job.returnvalue, errors via job.failedReason.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. GITHUB INTEGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Defined in: server/services/githubService.js, server/controllers/githubController.js
+Routes: server/routes/github.js → /api/git/*
+
+Operations supported:
+  • Browse repositories (list user repos, search)
+  • Fetch repo file tree (recursive)
+  • Fetch individual file content (base64 decoded)
+  • Commit a single file to a branch
+  • Commit multiple files atomically (Git Trees API — no force push)
+  • Create a new repository
+  • Fix GitHub Actions workflow permissions (auto-run on AI fix push)
+
+Multi-provider support (server/services/gitProviderService.js):
+  GitHub, GitLab, Bitbucket, Codeberg — same interface, different APIs.
+  Users can add PATs for additional providers via POST /auth/pat.
+
+GitHub OAuth scopes requested: repo, read:user, user:email
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. IN-BROWSER CODE EXECUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Three runtimes are available (user selectable):
+
+  WebContainers (@webcontainer/api)
+    • Component: src/components/WebContainerTerminal.tsx
+    • Full Node.js environment running natively in the browser
+    • Requires COOP/COEP headers (Cross-Origin-Opener-Policy, etc.)
+    • Best for JavaScript/TypeScript/Node projects
+
+  CheerpX (@leaningtech/cheerpx)
+    • Component: src/components/CheerpXTerminal.tsx
+    • x86 Linux emulation via WebAssembly
+    • Can run native Linux binaries, Python, etc.
+    • Slower startup, broader language support
+
+  v86 (x86 PC Emulator)
+    • Component: src/components/V86Terminal.tsx
+    • Boots a real Linux ISO image (linux3.iso) via CDN
+    • VITE_V86_ASSET_BASE: CDN for BIOS/WASM/seabios files
+    • VITE_V86_LINUX_IMAGE: URL for the Linux disk image
+    • Timeout configurable via VITE_V86_EXEC_TIMEOUT (default 120000ms)
+
+Server-side execution: server/utils/dockerSandbox.js
+  • Runs code in an isolated Docker container on the server
+  • Used for /api/project/:owner/:repo/:branch/run and exec endpoints
+  • Generates Dockerfiles using AI (generateDockerfileForProject)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. FULL API ENDPOINT REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─── Health / Info ───────────────────────────────────────────────────────────────
+GET  /health
+  Returns: { status, version, ai (provider name), github (bool), supabase (bool) }
+
+─── Auth (server/routes/auth.js) ────────────────────────────────────────────────
+GET  /auth/github              Start GitHub OAuth flow (redirect)
+GET  /auth/github/callback     OAuth callback — issues JWT cookie, redirects to /dashboard
+GET  /auth/me                  Return current user profile (requires cookie)
+POST /auth/logout              Clear JWT cookie
+POST /auth/pat                 Save a Personal Access Token for another git provider
+
+─── AI Review (server/routes/review.js) ──────────────────────────────────────────
+POST /api/review               Submit code for AI review
+  Body: { code, language, provider, apiKey, model }
+  Returns: { score, summary, issues[], fixes[] }
+
+GET  /api/providers            List which providers are configured on the server
+
+─── Code Execution (server/routes/execute.js) ────────────────────────────────────
+POST /api/execute              Execute code snippet (unused/stub)
+
+─── GitHub / Git (server/routes/github.js) ───────────────────────────────────────
+GET  /api/git/repos            List authenticated user's repos
+GET  /api/git/:owner/:repo/tree/:branch   Get file tree
+GET  /api/git/:owner/:repo/file           Get file content
+POST /api/git/:owner/:repo/commit         Commit single file
+POST /api/git/:owner/:repo/commits        Commit multiple files (batch)
+POST /api/git/create           Create new repository
+
+─── Project / Chat (server/routes/project.js) ────────────────────────────────────
+POST /api/project/:owner/:repo/:branch/run          Run project in Docker
+POST /api/project/:owner/:repo/analyze              AI project code review
+POST /api/project/:owner/:repo/:branch/push-fixes   Push AI-suggested fixes
+POST /api/project/:owner/:repo/:branch/exec         Execute command in container
+GET  /api/project/:owner/:repo/threads              List chat threads
+POST /api/project/:owner/:repo/threads              Create chat thread
+GET  /api/project/threads/:threadId/history         Get chat history
+DELETE /api/project/threads/:threadId               Delete a thread
+DELETE /api/project/:owner/:repo/chat               Clear all chat history for a repo
+POST /api/project/:owner/:repo/:threadId/chat       Send a chat message (3-agent pipeline)
+  Query: branch
+  Body: { message, agents, targetPath, attachments }
+  Returns: { message, command, fixes[] }
+
+─── Agent Queue (server/routes/agent.js) ─────────────────────────────────────────
+POST /api/agent/workload       Enqueue a background AI task
+  Body: { type, provider, userId, payload }
+  Returns: { jobId }
+
+GET  /api/agent/tasks          List current user's tasks
+GET  /api/agent/tasks/:id      Get task status + result
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. FRONTEND PAGES & COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pages (src/pages/):
+  LandingPage.tsx       — Marketing/home page. Features hero, 3-agent overview,
+                          and CTA to launch the dashboard. Uses Framer Motion.
+  DashboardPage.tsx     — Main app shell. Hosts all the sub-components.
+
+Key Components (src/components/):
+  ProjectWorkspace.tsx  — 46KB — The full IDE: Monaco editor, file tree,
+                          terminal, chat panel, revision controls. Central component.
+  RepoBrowser.tsx       — Browse GitHub repos, search, and open files.
+  ReviewPanel.tsx       — Display AI review results: score ring, issues list,
+                          severity badges, suggested fixes with apply buttons.
+  SettingsDialog.tsx    — Settings panel (right drawer) for AI providers,
+                          model selection, agent role assignment, appearance,
+                          and DevOps agent permissions.
+  CommitDialog.tsx      — Multi-file commit UI with branch selection.
+  GenerateProjectDialog.tsx — Form to trigger 3-agent project generation.
+  GenerationOverlay.tsx — Full-screen overlay showing generation progress.
+  ExecutionPanel.tsx    — Unified execution panel (selects runtime).
+  FileTree.tsx          — Recursive file tree with expand/collapse.
+  GitHubConnect.tsx     — GitHub login/connect component.
+  GitHubSetupDialog.tsx — Dialog to configure GitHub OAuth / PAT.
+  ScoreRing.tsx         — Animated circular score indicator (0–10).
+  SeverityBadge.tsx     — Colored badge: critical / warning / info.
+  ProgressBar.tsx       — Progress bar component.
+  RecentReviews.tsx     — Local history of recent code reviews.
+  WebContainerTerminal.tsx — xterm + WebContainers integration.
+  CheerpXTerminal.tsx   — xterm + CheerpX integration.
+  V86Terminal.tsx       — xterm + v86 emulator integration.
+  ManualTerminal.tsx    — Manual command input terminal.
+  mode-toggle.tsx       — Dark/light theme toggle (next-themes).
+  theme-provider.tsx    — Theme context + custom color injection.
+
+Services (src/services/):
+  settings.ts           — Load/save AppSettings to localStorage.
+                          Defines AI_PROVIDERS config array with models.
+  (other services for API calls, GitHub, storage)
+
+Custom Hooks (src/hooks/):
+  Various hooks for auth state, settings, review submission, etc.
+
+Types (src/types/):
+  settings.ts           — AppSettings, AIProviderId, provider configs.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+15. ENVIRONMENT VARIABLES REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─── Frontend (.env at project root) ─────────────────────────────────────────────
+VITE_API_URL              Backend URL (empty in production = same origin)
+VITE_SUPABASE_URL         Supabase project URL (for client-side supabase-js)
+VITE_SUPABASE_ANON_KEY    Supabase anon/public key
+VITE_V86_ASSET_BASE       CDN base URL for v86 WASM/BIOS assets
+VITE_V86_LINUX_IMAGE      URL for Linux ISO image used by v86
+VITE_V86_EXEC_TIMEOUT     Execution timeout in ms (default: 120000)
+VITE_V86_PROJECT_PATH     Path inside v86 VM for project files
+
+─── Backend (server/.env) ───────────────────────────────────────────────────────
+NODE_ENV                  development | production
+PORT                      Server port (default: 3001 dev, 3000 prod)
+CLIENT_URL                Frontend URL(s) for CORS (comma-separated)
+SERVER_URL                This server's URL (used for OAuth callback)
+
+SUPABASE_URL              Supabase project URL
+SUPABASE_SERVICE_ROLE_KEY Supabase service role key (bypasses RLS)
+
+JWT_SECRET                64-char hex random string for signing JWT cookies
+                          Generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+GITHUB_CLIENT_ID          GitHub OAuth App Client ID
+GITHUB_CLIENT_SECRET      GitHub OAuth App Client Secret
+
+GROQ_API_KEY              Groq API key (https://console.groq.com/keys)
+OPENAI_API_KEY            OpenAI API key (https://platform.openai.com/api-keys)
+GEMINI_API_KEY            Google AI Studio key (https://aistudio.google.com/app/apikey)
+ANTHROPIC_API_KEY         Anthropic Console key (https://console.anthropic.com)
+XAI_API_KEY               xAI Console key (https://console.x.ai)
+NVIDIA_API_KEY            NVIDIA NIM key (https://build.nvidia.com)
+OPENROUTER_API_KEY        OpenRouter key (https://openrouter.ai/keys)
+
+REDIS_URL                 Redis connection string (default: redis://localhost:6379)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+16. PROJECT DIRECTORY STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+e:\project\project\
+├── .env                          Frontend environment variables
+├── .env.example                  Frontend env template
+├── index.html                    Vite HTML entry point
+├── package.json                  Frontend dependencies (React, Vite, Tailwind, etc.)
+├── tsconfig.app.json             TypeScript config for app
+├── tsconfig.json                 TypeScript root config
+├── vite.config.ts                Vite configuration
+├── components.json               shadcn/ui configuration
+├── docker-compose.yml            Local Redis for development
+├── render.yaml                   Render.com one-click deployment config
+├── start.bat                     Windows dev launcher (starts both servers)
+├── kill.bat                      Windows dev stopper
+├── supabase-setup.sql            Full DB schema (run in Supabase SQL editor)
+├── supabase_migrations.sql       Additional migrations
+├── LICENSE                       MIT License
+│
+├── src/                          React frontend source
+│   ├── App.tsx                   Root app with router setup
+│   ├── main.tsx                  React entry point + Supabase client init
+│   ├── index.css                 Global CSS + Tailwind base
+│   ├── components/               UI components (see §14)
+│   │   └── ui/                   shadcn/ui generated primitives
+│   ├── pages/
+│   │   ├── LandingPage.tsx       Marketing landing page
+│   │   └── DashboardPage.tsx     Main application dashboard
+│   ├── services/                 API client, settings, GitHub service
+│   ├── hooks/                    Custom React hooks
+│   ├── types/                    TypeScript type definitions
+│   ├── store/                    State management (if used)
+│   ├── lib/                      Utilities (cn, etc.)
+│   └── execution/                In-browser execution helpers
+│
+├── server/                       Express backend
+│   ├── .env                      Backend environment variables
+│   ├── .env.example              Backend env template
+│   ├── index.js                  Server entry point, middleware, route mounting
+│   ├── package.json              Backend dependencies
+│   ├── controllers/
+│   │   ├── reviewController.js   AI code review logic
+│   │   ├── projectController.js  Project run/analyze/chat/push-fixes
+│   │   ├── githubController.js   GitHub repo operations
+│   │   └── executeController.js  Code execution (stub)
+│   ├── routes/
+│   │   ├── auth.js               GitHub OAuth + JWT (full auth flow)
+│   │   ├── review.js             /api/review + /api/providers
+│   │   ├── execute.js            /api/execute
+│   │   ├── github.js             /api/git/*
+│   │   ├── project.js            /api/project/*
+│   │   └── agent.js              /api/agent/*
+│   ├── services/
+│   │   ├── aiService.js          All AI provider integrations + fallback chain
+│   │   ├── agentQueue.js         BullMQ queue + worker + task handlers
+│   │   ├── supabaseService.js    Supabase admin CRUD operations
+│   │   ├── githubService.js      GitHub REST API calls
+│   │   ├── gitProviderService.js Multi-provider adapter (GitHub/GitLab/etc.)
+│   │   └── semanticSearch.js     Local Xenova embeddings + cosine similarity
+│   ├── prompts/                  AI prompt templates
+│   └── utils/
+│       └── dockerSandbox.js      Server-side Docker execution sandbox
+│
+├── supabase/
+│   └── migrations/               Supabase migration files
+└── dist/                         Built frontend (served by Express in production)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+17. KEY DESIGN DECISIONS & NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. MONOREPO-LITE STRUCTURE
+   Frontend and backend in the same Git repo. Vite builds frontend into /dist
+   which Express then serves as static files. In dev, Vite (port 5173) and
+   Express (port 3001) run separately with CORS.
+
+2. JWT OVER SUPABASE AUTH
+   Instead of using Supabase's built-in Auth, the server issues its own JWT
+   after GitHub OAuth. This gives full control over the session and allows
+   the GitHub token to be stored only on the server side.
+
+3. NO FORCED PROVIDER
+   The platform works with just ONE AI API key (Groq has a free tier). All
+   7 providers are optional. The fallback chain ensures at least one works.
+
+4. AI KEYS NEVER STORED SERVER-SIDE PER USER
+   User-provided API keys live only in localStorage and are passed in the
+   request body. The server never writes them to the database.
+
+5. SEMANTIC SEARCH RUNS ON-SERVER
+   Using @xenova/transformers avoids any external embedding API cost or latency.
+   The model downloads once and caches in server/.cache.
+
+6. DOCKER SANDBOX FOR SERVER-SIDE EXECUTION
+   When the AI suggests fixes and the user wants to run the project on the
+   server, Docker isolates each execution. The browser-side WebContainers/v86
+   handle client-side execution without any server resources.
+
+7. CROSS-ORIGIN HEADERS HANDLED CAREFULLY
+   CORP: cross-origin is set globally. COEP is NOT set globally (would block
+   CDN resources). Only specific pages that need SharedArrayBuffer opt in
+   via HTML meta tags.
+
+8. BRANDING INCONSISTENCY
+   LandingPage.tsx and footer use "AgentForge AI" while server logs, package.json,
+   and supabase-setup.sql say "CodeSage AI". These appear to be two iterations
+   of the same product — "AgentForge" is the newer brand name.
+
+================================================================================
+                               END OF DOCUMENT
+================================================================================

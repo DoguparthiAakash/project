@@ -8,7 +8,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import Editor, { DiffEditor } from "@monaco-editor/react"
@@ -797,29 +796,24 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
 
               {/* Bottom: Terminal & Preview */}
               <ResizablePanel defaultSize={30} minSize={10} className="flex flex-col bg-card">
-                <Tabs defaultValue="ai-terminal" className="flex flex-col h-full">
-                  <TabsList className="w-full justify-start rounded-none bg-muted/50 border-b border-border h-10 p-0 overflow-x-auto overflow-y-hidden">
-                    <TabsTrigger value="ai-terminal" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">AI Terminal</TabsTrigger>
-                    <TabsTrigger value="manual-terminal" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Manual Terminal</TabsTrigger>
-                    {previewUrl && (
-                      <TabsTrigger value="preview" className="rounded-none data-[state=active]:bg-card data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:text-blue-500 h-full px-5 text-xs font-mono shrink-0 transition-colors hover:bg-muted">Web Preview</TabsTrigger>
-                    )}
-                  </TabsList>
-                  
-                  <TabsContent value="ai-terminal" className="flex-1 p-0 m-0 overflow-hidden flex flex-col relative bg-zinc-950">
-                    <V86Terminal onReady={() => {}} />
-                  </TabsContent>
-
-                  <TabsContent value="manual-terminal" className="flex-1 p-0 m-0 overflow-hidden flex flex-col relative bg-zinc-950">
-                    <V86Terminal onReady={() => {}} />
-                  </TabsContent>
-                  
+                {/* Single always-mounted V86Terminal owns all tab management */}
+                <div className="flex flex-col h-full">
+                  <V86Terminal
+                    defaultTab="agent"
+                    className="flex-1 min-h-0"
+                    onReady={() => {}}
+                  />
                   {previewUrl && (
-                    <TabsContent value="preview" className="flex-1 p-0 m-0 overflow-hidden bg-white">
-                      <iframe src={previewUrl} className="w-full h-full border-none" title="Web Preview" />
-                    </TabsContent>
+                    <div className="shrink-0 border-t border-border">
+                      <div className="flex items-center bg-muted/30 border-b border-border">
+                        <span className="px-4 h-9 flex items-center text-xs font-mono text-blue-400 border-b-2 border-blue-500 bg-card">
+                          Web Preview
+                        </span>
+                      </div>
+                      <iframe src={previewUrl} className="w-full h-48 border-none bg-white" title="Web Preview" />
+                    </div>
                   )}
-                </Tabs>
+                </div>
               </ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>
