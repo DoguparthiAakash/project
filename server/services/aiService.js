@@ -96,8 +96,8 @@ export async function generateWithGroq(prompt, { apiKey, model } = {}) {
   const res = await client.chat.completions.create({
     model: mdl,
     messages: [{ role: "user", content: prompt }],
-    temperature: 0.2,
-    max_tokens: 8192,
+    temperature: 0.1,
+    max_tokens: 4096,
     response_format: { type: "json_object" },
   })
   return res.choices[0].message.content
@@ -122,7 +122,7 @@ export async function generateWithNvidia(prompt, { apiKey, model } = {}) {
 
 export async function generateWithOpenRouter(prompt, { apiKey, model } = {}) {
   const key   = resolveKey(apiKey, "OPENROUTER_API_KEY", "OpenRouter")
-  const mdl   = model || "anthropic/claude-3.5-sonnet"
+  const mdl   = model || "meta-llama/llama-3.1-8b-instruct:free"
   const client = new OpenAI({ apiKey: key, baseURL: "https://openrouter.ai/api/v1" })
   const res = await client.chat.completions.create({
     model: mdl,
@@ -153,13 +153,13 @@ const GENERATORS = {
 export async function generateReview(prompt, { provider, apiKey, model } = {}) {
   // Ordered list of providers to try
   const fallbackChain = [
-    { id: "groq", envKey: "GROQ_API_KEY" },
-    { id: "grok", envKey: "XAI_API_KEY" },
-    { id: "gemini", envKey: "GEMINI_API_KEY" },
-    { id: "openai", envKey: "OPENAI_API_KEY" },
+    { id: "groq",      envKey: "GROQ_API_KEY" },
+    { id: "gemini",    envKey: "GEMINI_API_KEY" },
+    { id: "grok",      envKey: "XAI_API_KEY" },
+    { id: "openai",    envKey: "OPENAI_API_KEY" },
+    { id: "nvidia",    envKey: "NVIDIA_API_KEY" },
     { id: "anthropic", envKey: "ANTHROPIC_API_KEY" },
-    { id: "nvidia", envKey: "NVIDIA_API_KEY" },
-    { id: "openrouter", envKey: "OPENROUTER_API_KEY" }
+    { id: "openrouter",envKey: "OPENROUTER_API_KEY" }
   ];
 
   // If the user specified a provider/key in the frontend, try that first.
@@ -462,8 +462,8 @@ export async function chatWithGroq(messages, { apiKey, model } = {}) {
   const res = await client.chat.completions.create({
     model: mdl,
     messages: formattedMessages,
-    temperature: 0.2,
-    max_tokens: 8192,
+    temperature: 0.1,
+    max_tokens: 4096,
     response_format: { type: "json_object" },
   })
   return res.choices[0].message.content
@@ -487,7 +487,7 @@ export async function chatWithNvidia(messages, { apiKey, model } = {}) {
 
 export async function chatWithOpenRouter(messages, { apiKey, model } = {}) {
   const key   = resolveKey(apiKey, "OPENROUTER_API_KEY", "OpenRouter")
-  const mdl   = model || "anthropic/claude-3.5-sonnet"
+  const mdl   = model || "meta-llama/llama-3.1-8b-instruct:free"
   const client = new OpenAI({ apiKey: key, baseURL: "https://openrouter.ai/api/v1" })
 
   const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
@@ -518,13 +518,13 @@ const CHAT_GENERATORS = {
  */
 export async function generateChat(messages, { provider, apiKey, model } = {}) {
   const fallbackChain = [
-    { id: "groq", envKey: "GROQ_API_KEY" },
-    { id: "grok", envKey: "XAI_API_KEY" },
-    { id: "gemini", envKey: "GEMINI_API_KEY" },
-    { id: "openai", envKey: "OPENAI_API_KEY" },
+    { id: "groq",      envKey: "GROQ_API_KEY" },
+    { id: "gemini",    envKey: "GEMINI_API_KEY" },
+    { id: "grok",      envKey: "XAI_API_KEY" },
+    { id: "openai",    envKey: "OPENAI_API_KEY" },
+    { id: "nvidia",    envKey: "NVIDIA_API_KEY" },
     { id: "anthropic", envKey: "ANTHROPIC_API_KEY" },
-    { id: "nvidia", envKey: "NVIDIA_API_KEY" },
-    { id: "openrouter", envKey: "OPENROUTER_API_KEY" }
+    { id: "openrouter",envKey: "OPENROUTER_API_KEY" }
   ];
 
   if (provider || apiKey) {
