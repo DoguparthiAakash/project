@@ -87,21 +87,82 @@ export async function generateWithAnthropic(prompt, { apiKey, model } = {}) {
   return msg.content[0].type === "text" ? msg.content[0].text : ""
 }
 
-// ─── Groq ─────────────────────────────────────────────────────────────────────
+// ─── Groq — multi-model rotation ──────────────────────────────────────────────
+//
+// Models are tried in priority order: fastest/smallest first, most capable last.
+// A model is skipped if it returns:
+//   - 429  (rate limited / quota exceeded)
+//   - 404  (model not available on this account tier)
+//   - 503  (temporarily unavailable)
+// Any other error (auth, bad request, etc.) is re-thrown immediately.
+
+export const GROQ_MODEL_CHAIN = [
+  "llama-3.1-8b-instant",          // fastest, lowest latency
+  "llama-3.2-3b-preview",           // tiny, ultra-fast fallback
+  "gemma2-9b-it",                   // Google Gemma via Groq
+  "mixtral-8x7b-32768",             // MoE — large context, quick
+  "llama3-8b-8192",                 // stable older 8b
+  "llama3-70b-8192",                // older 70b, strong
+  "llama-3.3-70b-versatile",        // newest 70b, most capable
+  "deepseek-r1-distill-llama-70b",  // reasoning model, last resort
+]
+
+/** Returns true for transient/quota errors that warrant trying the next model */
+function isGroqSkippable(err) {
+  const msg  = err?.message?.toLowerCase() ?? ""
+  const code = err?.status ?? err?.statusCode ?? 0
+  return (
+    code === 429 || code === 404 || code === 503 ||
+    msg.includes("rate limit") ||
+    msg.includes("model not found") ||
+    msg.includes("does not exist") ||
+    msg.includes("not available") ||
+    msg.includes("temporarily unavailable")
+  )
+}
 
 export async function generateWithGroq(prompt, { apiKey, model } = {}) {
-  const key   = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
-  const mdl   = model || "llama-3.1-8b-instant"
+  const key    = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
-  const res = await client.chat.completions.create({
-    model: mdl,
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.1,
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-  })
-  return res.choices[0].message.content
+
+  // If caller forces a specific model, honour it without rotation
+  if (model) {
+    const res = await client.chat.completions.create({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+    })
+    return res.choices[0].message.content
+  }
+
+  let lastError
+  for (const mdl of GROQ_MODEL_CHAIN) {
+    try {
+      console.log(`[Groq] Trying model: ${mdl}`)
+      const res = await client.chat.completions.create({
+        model: mdl,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+      })
+      console.log(`[Groq] Success with model: ${mdl}`)
+      return res.choices[0].message.content
+    } catch (err) {
+      if (isGroqSkippable(err)) {
+        console.warn(`[Groq] Model ${mdl} unavailable (${err?.status ?? err.message}), trying next...`)
+        lastError = err
+        continue
+      }
+      throw err // non-recoverable error — bubble up immediately
+    }
+  }
+
+  throw new Error(`[Groq] All models exhausted. Last error: ${lastError?.message}`)
 }
+
 
 // ─── NVIDIA NIM ─────────────────────────────────────────────────────────────────
 
@@ -452,21 +513,48 @@ export async function chatWithAnthropic(messages, { apiKey, model } = {}) {
 }
 
 export async function chatWithGroq(messages, { apiKey, model } = {}) {
-  const key   = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
-  const mdl   = model || "llama-3.1-8b-instant"
+  const key    = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
 
-  // Groq's default model does not support vision, strip attachments
+  // Groq text models don't support vision — strip attachment metadata
   const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
 
-  const res = await client.chat.completions.create({
-    model: mdl,
-    messages: formattedMessages,
-    temperature: 0.1,
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-  })
-  return res.choices[0].message.content
+  // If caller forces a specific model, honour it without rotation
+  if (model) {
+    const res = await client.chat.completions.create({
+      model,
+      messages: formattedMessages,
+      temperature: 0.1,
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+    })
+    return res.choices[0].message.content
+  }
+
+  let lastError
+  for (const mdl of GROQ_MODEL_CHAIN) {
+    try {
+      console.log(`[Groq/chat] Trying model: ${mdl}`)
+      const res = await client.chat.completions.create({
+        model: mdl,
+        messages: formattedMessages,
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+      })
+      console.log(`[Groq/chat] Success with model: ${mdl}`)
+      return res.choices[0].message.content
+    } catch (err) {
+      if (isGroqSkippable(err)) {
+        console.warn(`[Groq/chat] Model ${mdl} unavailable (${err?.status ?? err.message}), trying next...`)
+        lastError = err
+        continue
+      }
+      throw err
+    }
+  }
+
+  throw new Error(`[Groq/chat] All models exhausted. Last error: ${lastError?.message}`)
 }
 
 export async function chatWithNvidia(messages, { apiKey, model } = {}) {
