@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   Search, FileCode2, Zap, Settings2, AlignJustify,
-  ChevronsUpDown, Fold, Map, WrapText, GitBranch,
+  ChevronsUpDown, FoldVertical, Map, WrapText, GitBranch,
   Play, Sparkles, ArrowRight, X,
 } from "lucide-react"
 import type * as monaco from "monaco-editor"
@@ -134,7 +134,7 @@ export function CommandPalette({
       label: "Fold All",
       description: "Collapse all code blocks",
       category: "action",
-      icon: <Fold className="size-3.5" />,
+      icon: <FoldVertical className="size-3.5" />,
       run: () => runAction("editor.foldAll"),
     },
     {
@@ -142,7 +142,7 @@ export function CommandPalette({
       label: "Unfold All",
       description: "Expand all code blocks",
       category: "action",
-      icon: <Fold className="size-3.5" />,
+      icon: <FoldVertical className="size-3.5" />,
       run: () => runAction("editor.unfoldAll"),
     },
     {
