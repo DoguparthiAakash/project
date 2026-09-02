@@ -1,16 +1,18 @@
-import { useState, useRef, useEffect } from "react"
-import { 
+import { useState, useRef, useEffect, useCallback } from "react"
+import {
   Play, Sparkles, ArrowLeft,
   Save, Loader2, GitCommitHorizontal, FileCode2,
   Image as ImageIcon, X, Terminal,
   Files, Search, GitBranch, Settings, LayoutPanelLeft,
-  CheckCircle2
+  CheckCircle2, Command,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import Editor, { DiffEditor } from "@monaco-editor/react"
+import { DiffEditor } from "@monaco-editor/react"
+import type * as monaco from "monaco-editor"
+import type { Monaco } from "@monaco-editor/react"
 import { Terminal as XTerminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
@@ -24,6 +26,13 @@ import { getWebContainer, mountRepoAndRun, writeFileToWebContainer } from "@/ser
 import { loadSettings } from "@/services/settings"
 import { writeFileToCheerpX } from "@/services/cheerpx"
 import { V86Terminal } from "./V86Terminal"
+import { MonacoEditor, type ContextMenuAction } from "@/components/MonacoEditor"
+import { EditorBreadcrumb } from "@/components/EditorBreadcrumb"
+import { EditorToolbar, type WordWrapMode } from "@/components/EditorToolbar"
+import { FindInFiles } from "@/components/FindInFiles"
+import { CommandPalette } from "@/components/CommandPalette"
+import { getFileIcon } from "@/lib/fileIcons"
+import { getMonacoLanguage } from "@/lib/languageMap"
 
 interface ProjectWorkspaceProps {
   repo: GHRepo
@@ -46,11 +55,21 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'scm'>('explorer')
   const [showSettings, setShowSettings] = useState(false)
   const [showMinimap, setShowMinimap] = useState(false)
-  
-  // Search State
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [isSearching, setIsSearching] = useState(false)
+  const [wordWrap, setWordWrap] = useState<WordWrapMode>("on")
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+
+  // Editor instance (stable ref, set by MonacoEditor.onEditorMount)
+  const monacoEditorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const monacoInstanceRef = useRef<Monaco | null>(null)
+
+  // Cursor / status bar state
+  const [cursorLine, setCursorLine] = useState(1)
+  const [cursorCol, setCursorCol] = useState(1)
+  const [selectionCount, setSelectionCount] = useState(0)
+
+  // File lists for command palette
+  const [recentFiles, setRecentFiles] = useState<string[]>([])
+  const [allRepoFiles, setAllRepoFiles] = useState<string[]>([])
   
   const [unsavedChanges, setUnsavedChanges] = useState<Record<string, string>>({})
   const unsavedChangesRef = useRef(unsavedChanges)
@@ -82,28 +101,71 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   // Initialize Xterm
   useEffect(() => {
     if (terminalRef.current && !xtermRef.current) {
-      const term = new XTerminal({ 
+      const term = new XTerminal({
         theme: { background: '#09090b' },
-        fontFamily: 'monospace',
-        fontSize: 12
+        fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+        fontSize: 12,
+        cursorBlink: true,
       })
       const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
       term.open(terminalRef.current)
       fitAddon.fit()
-      
       xtermRef.current = term
       fitAddonRef.current = fitAddon
       term.writeln('CodeSage WebContainer Terminal Ready.')
     }
-    
-    const handleResize = () => {
-      fitAddonRef.current?.fit()
-    }
-    
+    const handleResize = () => { fitAddonRef.current?.fit() }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // Ctrl+Shift+P → open command palette (global listener)
+  useEffect(() => {
+    const onOpen = () => setCommandPaletteOpen(true)
+    window.addEventListener('codesage:openPalette', onOpen)
+    const onFind = () => setActiveSidebarTab('search')
+    window.addEventListener('codesage:openFindInFiles', onFind)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault()
+        setCommandPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('codesage:openPalette', onOpen)
+      window.removeEventListener('codesage:openFindInFiles', onFind)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
+
+  // Track recently opened files
+  useEffect(() => {
+    if (selectedFilePath) {
+      setRecentFiles(prev => {
+        const next = [selectedFilePath, ...prev.filter(p => p !== selectedFilePath)]
+        return next.slice(0, 20)
+      })
+    }
+  }, [selectedFilePath])
+
+  // Lazy-fetch full repo file list for command palette
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${owner}/${repoName}/git/trees/${branch}?recursive=1`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.tree) {
+          setAllRepoFiles(
+            d.tree
+              .filter((f: any) => f.type === 'blob')
+              .map((f: any) => f.path)
+              .slice(0, 200)
+          )
+        }
+      })
+      .catch(() => {})
+  }, [owner, repoName, branch])
 
   
   useEffect(() => {
@@ -458,23 +520,6 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
     }
   }
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return
-    setIsSearching(true)
-    try {
-      // Minimal implementation for file-name search across the tree
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repoName}/git/trees/${branch}?recursive=1`)
-      const data = await res.json()
-      if (data.tree) {
-        const matches = data.tree.filter((f: any) => f.type === 'blob' && f.path.toLowerCase().includes(searchQuery.toLowerCase()))
-        setSearchResults(matches)
-      }
-    } catch (err: any) {
-      toast.error("Search failed: " + err.message)
-    } finally {
-      setIsSearching(false)
-    }
-  }
 
   const unsavedCount = Object.keys(unsavedChanges).length
 
@@ -601,40 +646,22 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
             )}
 
             {activeSidebarTab === 'search' && (
-              <>
-                <div className="px-4 py-3 border-b border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  Search
-                </div>
-                <div className="p-4 flex flex-col h-full overflow-hidden">
-                  <div className="flex gap-2 mb-4 shrink-0">
-                    <input 
-                      type="text" 
-                      placeholder="Search file names..." 
-                      className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                    />
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    {isSearching ? (
-                      <div className="flex justify-center p-4"><Loader2 className="size-4 animate-spin text-muted-foreground" /></div>
-                    ) : searchResults.length > 0 ? (
-                      <ul className="space-y-1">
-                        {searchResults.map(f => (
-                          <li key={f.path} 
-                              onClick={() => handleFileSelect(f.path)}
-                              className="text-xs font-mono truncate px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer transition-colors text-muted-foreground hover:text-foreground">
-                            {f.path}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-xs text-muted-foreground text-center mt-4">No results</div>
-                    )}
-                  </div>
-                </div>
-              </>
+              <div className="flex flex-col h-full overflow-hidden">
+                <FindInFiles
+                  owner={owner}
+                  repo={repoName}
+                  branch={branch}
+                  onFileOpen={(path, line) => {
+                    handleFileSelect(path)
+                    if (line && monacoEditorRef.current) {
+                      setTimeout(() => {
+                        monacoEditorRef.current?.revealLineInCenter(line)
+                        monacoEditorRef.current?.setPosition({ lineNumber: line, column: 1 })
+                      }, 300)
+                    }
+                  }}
+                />
+              </div>
             )}
 
             {activeSidebarTab === 'scm' && (
@@ -686,111 +713,178 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
           <ResizablePanelGroup orientation="vertical">
             {/* Top: Editor */}
             <ResizablePanel defaultSize={70} className="flex flex-col relative">
-              {/* Editor Header Tabs */}
-              <div className="flex bg-card border-b border-border justify-between items-center pr-4">
-                <div className="flex overflow-x-auto scrollbar-hide">
+              {/* ── File Tabs ──────────────────────────────────────────── */}
+              <div className="flex bg-[#0d1117] border-b border-[#21262d] justify-between items-center pr-2 shrink-0">
+                <div className="flex overflow-x-auto no-scrollbar">
                   {openFiles.length > 0 ? (
-                    openFiles.map((path, idx) => (
-                      <div 
-                        key={path || idx}
-                        onClick={() => path && setSelectedFilePath(path)}
-                        className={`px-4 py-3 text-sm border-r border-border flex items-center gap-2 cursor-pointer whitespace-nowrap min-w-fit transition-colors ${selectedFilePath === path ? 'bg-primary/5 border-t-2 border-t-primary text-primary font-medium' : 'bg-transparent border-t-2 border-t-transparent text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                      >
-                        <FileCode2 className={`size-4 ${selectedFilePath === path ? 'text-primary' : 'opacity-70'}`} />
-                        {path ? path.split("/").pop() : "Unknown"}
-                        {path && unsavedChanges[path] !== undefined && (
-                          <span className="w-2 h-2 rounded-full bg-yellow-500 ml-1 animate-pulse"></span>
-                        )}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCloseFile(path)
-                          }}
-                          className={`ml-2 p-1 rounded-md flex items-center justify-center transition-all ${selectedFilePath === path ? 'hover:bg-primary/10 text-primary' : 'opacity-50 hover:opacity-100 hover:bg-muted text-foreground'}`}
+                    openFiles.map((path, idx) => {
+                      const fi = getFileIcon(path)
+                      const isActive = selectedFilePath === path
+                      return (
+                        <div
+                          key={path || idx}
+                          onClick={() => path && setSelectedFilePath(path)}
+                          className={`group px-3 py-2.5 border-r border-[#21262d] flex items-center gap-1.5 cursor-pointer whitespace-nowrap min-w-fit transition-colors text-xs font-mono ${
+                            isActive
+                              ? 'bg-[#161b22] border-t-2 border-t-blue-500 text-zinc-100'
+                              : 'border-t-2 border-t-transparent text-zinc-500 hover:bg-[#161b22]/50 hover:text-zinc-300'
+                          }`}
                         >
-                          <span className="sr-only">Close</span>
-                          <X className="size-3" />
-                        </button>
-                      </div>
-                    ))
+                          <span className={`text-[11px] ${fi.color}`}>{fi.icon}</span>
+                          <span>{path ? path.split('/').pop() : 'Unknown'}</span>
+                          {path && unsavedChanges[path] !== undefined && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" />
+                          )}
+                          <button
+                            onClick={e => { e.stopPropagation(); handleCloseFile(path) }}
+                            className={`ml-1 p-0.5 rounded flex items-center justify-center transition-opacity ${
+                              isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
+                            } hover:bg-white/10`}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      )
+                    })
                   ) : (
-                    <div className="px-4 py-3 text-sm text-muted-foreground italic">No files open</div>
+                    <div className="px-4 py-2.5 text-xs text-zinc-600 italic">No files open</div>
                   )}
                 </div>
-                {selectedFilePath && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleSaveFile} 
-                    disabled={savingFile}
-                    className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-muted gap-1.5 rounded-xl px-4"
+
+                {/* Header right actions */}
+                <div className="flex items-center gap-1 px-2">
+                  {/* Command Palette trigger */}
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={() => setCommandPaletteOpen(true)}
+                    className="h-7 w-7 text-zinc-500 hover:text-zinc-300"
+                    title="Command Palette (Ctrl+Shift+P)"
                   >
-                    {savingFile ? <Loader2 className="size-3 animate-spin text-primary" /> : <Save className="size-3" />}
-                    Save
+                    <Command className="size-3.5" />
                   </Button>
-                )}
+                  {selectedFilePath && (
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={handleSaveFile}
+                      disabled={savingFile}
+                      className="h-7 text-xs text-zinc-500 hover:text-zinc-200 gap-1.5 px-2"
+                    >
+                      {savingFile ? <Loader2 className="size-3 animate-spin text-blue-400" /> : <Save className="size-3" />}
+                      Save
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              {/* Editor Content */}
-              <div className="flex-1 relative">
-                {loadingFile ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
-                    <Loader2 className="size-8 animate-spin text-primary" />
+              {/* ── Breadcrumb ─────────────────────────────────────────── */}
+              {selectedFilePath && (
+                <EditorBreadcrumb filePath={selectedFilePath} />
+              )}
+
+              {/* ── Toolbar ────────────────────────────────────────────── */}
+              {selectedFilePath && (
+                <EditorToolbar
+                  editorRef={monacoEditorRef}
+                  filePath={selectedFilePath}
+                  cursorLine={cursorLine}
+                  cursorCol={cursorCol}
+                  selectionCount={selectionCount}
+                  showMinimap={showMinimap}
+                  onMinimapToggle={() => setShowMinimap(v => !v)}
+                  wordWrap={wordWrap}
+                  onWordWrapChange={setWordWrap}
+                  fileContent={fileContent}
+                />
+              )}
+
+              {/* ── Editor Content ─────────────────────────────────────── */}
+              <div className="flex-1 relative min-h-0">
+                {loadingFile && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]/70 backdrop-blur-sm z-10">
+                    <Loader2 className="size-8 animate-spin text-blue-400" />
                   </div>
-                ) : null}
-                
+                )}
+
                 {selectedFilePath ? (
                   previewFixes[selectedFilePath] !== undefined ? (
+                    /* ── Diff view for AI fixes ───────────────────────── */
                     <div className="flex flex-col h-full relative">
-                      <div className="absolute z-10 top-4 right-8 flex items-center gap-2 bg-background border border-border p-1.5 rounded-md shadow-lg">
-                        <Button size="sm" onClick={() => handleAcceptFix(selectedFilePath)} className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white">Accept Changes</Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleRejectFix(selectedFilePath)} className="h-7 text-xs hover:bg-muted">Reject</Button>
+                      <div className="absolute z-10 top-4 right-8 flex items-center gap-2 bg-[#161b22] border border-[#30363d] p-1.5 rounded-lg shadow-xl">
+                        <div className="text-xs text-zinc-400 px-2">
+                          AI suggested changes
+                        </div>
+                        <Button size="sm" onClick={() => handleAcceptFix(selectedFilePath)}
+                          className="h-7 text-xs bg-blue-600 hover:bg-blue-500 text-white">
+                          Accept
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleRejectFix(selectedFilePath)}
+                          className="h-7 text-xs text-zinc-400 hover:text-zinc-200">
+                          Reject
+                        </Button>
                       </div>
                       <DiffEditor
                         height="100%"
-                        language={selectedFilePath.split('.').pop() || "plaintext"}
-                        theme="vs-dark"
+                        language={getMonacoLanguage(selectedFilePath)}
+                        theme="codesage-dark"
                         original={fileContent}
                         modified={previewFixes[selectedFilePath]}
                         options={{
                           renderSideBySide: false,
                           minimap: { enabled: showMinimap },
-                          fontSize: 14,
-                          wordWrap: "on",
-                          padding: { top: 16 }
+                          fontSize: 13,
+                          wordWrap,
+                          padding: { top: 16 },
+                          fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+                          fontLigatures: true,
                         }}
                       />
                     </div>
                   ) : (
-                    <Editor
-                      height="100%"
-                      language={selectedFilePath.split('.').pop() || "plaintext"}
-                      theme="vs-dark"
+                    /* ── Normal editor ────────────────────────────────── */
+                    <MonacoEditor
                       value={fileContent}
+                      filePath={selectedFilePath}
                       onChange={handleFileChange}
-                      onMount={(editor, monaco) => {
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-                          handleSaveFile()
-                        })
+                      onSave={handleSaveFile}
+                      showMinimap={showMinimap}
+                      wordWrap={wordWrap}
+                      onCursorChange={(line, col, sels) => {
+                        setCursorLine(line)
+                        setCursorCol(col)
+                        setSelectionCount(sels)
                       }}
-                      options={{
-                        minimap: { enabled: showMinimap },
-                        fontSize: 14,
-                        wordWrap: "on",
-                        padding: { top: 16 }
+                      onEditorMount={(editor, monacoInstance) => {
+                        monacoEditorRef.current = editor
+                        monacoInstanceRef.current = monacoInstance
+                      }}
+                      onContextMenuAction={(action, selectedText) => {
+                        const prompts: Record<ContextMenuAction, string> = {
+                          'ask-ai': `About this code:\n\n\`\`\`\n${selectedText}\n\`\`\`\n\nCan you explain what it does?`,
+                          'explain': `Explain this code in detail:\n\n\`\`\`\n${selectedText}\n\`\`\``,
+                          'generate-tests': `Generate unit tests for this code:\n\n\`\`\`\n${selectedText}\n\`\`\``,
+                        }
+                        setChatInput(prompts[action])
                       }}
                     />
                   )
                 ) : (
-                  <div className="flex h-full items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <FileCode2 className="size-12 mx-auto mb-4 opacity-20" />
-                      <p>Select a file to start editing</p>
+                  /* ── Empty state ──────────────────────────────────────── */
+                  <div className="flex h-full items-center justify-center bg-[#0d1117]">
+                    <div className="text-center space-y-4">
+                      <FileCode2 className="size-14 mx-auto text-zinc-800" />
+                      <div>
+                        <p className="text-zinc-500 text-sm">Select a file from the Explorer</p>
+                        <p className="text-zinc-700 text-xs mt-1">
+                          or press{" "}
+                          <kbd className="border border-zinc-700 rounded px-1 text-zinc-500">Ctrl+Shift+P</kbd>
+                          {" "}to open the Command Palette
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
-                </div>
-              </ResizablePanel>
+              </div>
+            </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border h-1 hover:bg-primary/30 transition-colors" />
 
@@ -962,37 +1056,98 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
           </ResizablePanelGroup>
         </div>
 
-        {/* Status Bar */}
-        <div className="h-6 shrink-0 bg-primary text-primary-foreground flex items-center justify-between px-4 text-[10px] font-mono shadow-sm">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 font-semibold">
+        {/* ── Status Bar (VS Code style) ────────────────────────── */}
+        <div className="h-6 shrink-0 bg-[#1f6feb] text-white flex items-center justify-between px-4 text-[10px] font-mono shadow-sm select-none">
+          {/* Left section */}
+          <div className="flex items-center gap-0">
+            <span className="flex items-center gap-1.5 font-semibold px-2 hover:bg-white/10 h-6 cursor-pointer transition-colors rounded-sm"
+              onClick={() => setActiveSidebarTab('scm')}>
               <GitBranch className="size-3" />
               {branch}
             </span>
-            <span className="flex items-center gap-1.5 opacity-80 cursor-pointer hover:opacity-100" onClick={() => setActiveSidebarTab('scm')}>
+            <span className="flex items-center gap-1.5 px-2 hover:bg-white/10 h-6 cursor-pointer transition-colors rounded-sm opacity-80"
+              onClick={() => setActiveSidebarTab('scm')}>
               <CheckCircle2 className="size-3" />
-              {unsavedCount} pending changes
+              {unsavedCount > 0 ? `${unsavedCount} pending` : 'Clean'}
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            {selectedFilePath && (
-              <span className="opacity-80 flex items-center gap-1">
-                <FileCode2 className="size-3" />
-                {selectedFilePath.split('.').pop()?.toUpperCase() || 'TEXT'}
+
+          {/* Right section */}
+          <div className="flex items-center gap-0">
+            {/* Cursor position */}
+            {selectedFilePath && cursorLine > 0 && (
+              <span
+                className="px-2 hover:bg-white/10 h-6 flex items-center cursor-pointer transition-colors rounded-sm"
+                onClick={() => monacoEditorRef.current?.getAction('editor.action.gotoLine')?.run()}
+                title="Go to Line"
+              >
+                Ln {cursorLine}, Col {cursorCol}
+                {selectionCount > 0 && (
+                  <span className="ml-1.5 opacity-70">({selectionCount} sel)</span>
+                )}
               </span>
             )}
-            <span 
-              className="flex items-center gap-1.5 cursor-pointer hover:opacity-100"
-              onClick={() => setShowMinimap(!showMinimap)}
+
+            {/* Language / file type */}
+            {selectedFilePath && (
+              <span className="px-2 hover:bg-white/10 h-6 flex items-center gap-1 cursor-pointer transition-colors rounded-sm">
+                <span className={getFileIcon(selectedFilePath).color}>
+                  {getFileIcon(selectedFilePath).icon}
+                </span>
+                {getFileIcon(selectedFilePath).label}
+              </span>
+            )}
+
+            {/* Line ending */}
+            {selectedFilePath && (
+              <span className="px-2 hover:bg-white/10 h-6 flex items-center cursor-pointer transition-colors rounded-sm opacity-70">
+                {fileContent.includes('\r\n') ? 'CRLF' : 'LF'}
+              </span>
+            )}
+
+            {/* Encoding */}
+            <span className="px-2 hover:bg-white/10 h-6 flex items-center cursor-pointer transition-colors rounded-sm opacity-70">
+              UTF-8
+            </span>
+
+            {/* Word wrap */}
+            <span
+              className="px-2 hover:bg-white/10 h-6 flex items-center cursor-pointer transition-colors rounded-sm opacity-80"
+              onClick={() => setWordWrap(v => v === 'off' ? 'on' : 'off')}
+              title="Toggle Word Wrap"
+            >
+              {wordWrap === 'off' ? 'Wrap Off' : 'Wrap On'}
+            </span>
+
+            {/* Minimap */}
+            <span
+              className="px-2 hover:bg-white/10 h-6 flex items-center gap-1 cursor-pointer transition-colors rounded-sm"
+              onClick={() => setShowMinimap(v => !v)}
+              title="Toggle Minimap"
             >
               <LayoutPanelLeft className={`size-3 ${showMinimap ? '' : 'opacity-50'}`} />
-              Minimap
+              Map
             </span>
           </div>
         </div>
 
         {/* Settings Modal */}
         <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+
+        {/* ── Command Palette ───────────────────────────────────── */}
+        <CommandPalette
+          open={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          editorRef={monacoEditorRef}
+          openFiles={openFiles}
+          recentFiles={recentFiles}
+          allFiles={allRepoFiles}
+          onFileOpen={path => { handleFileSelect(path); setCommandPaletteOpen(false) }}
+          showMinimap={showMinimap}
+          onMinimapToggle={() => setShowMinimap(v => !v)}
+          wordWrap={wordWrap}
+          onWordWrapChange={setWordWrap}
+        />
     </div>
   )
 }
