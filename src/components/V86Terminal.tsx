@@ -17,8 +17,10 @@ import { Terminal as XTerminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 import { cn } from "@/lib/utils"
-import { Terminal, Bot, User, FileText, Bug, Trash2, Copy, Check } from "lucide-react"
+import { Terminal, Bot, MonitorPlay, FileText, Bug, Trash2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { WebContainerTerminal } from "./WebContainerTerminal"
+import { subscribeWCStatus, getWCStore } from "@/services/webcontainer"
 
 // ─── Singleton emulator store ─────────────────────────────────────────────────
 
@@ -329,7 +331,7 @@ function BootOverlay({ status, message }: { status: EmulatorSingleton["status"];
 
 // ─── Main exported component ──────────────────────────────────────────────────
 
-export type TerminalTab = "agent" | "user" | "output" | "debug"
+export type TerminalTab = "agent" | "webcontainer" | "output" | "debug"
 
 interface V86TerminalPanelProps {
   /** Initial tab to show */
@@ -337,9 +339,10 @@ interface V86TerminalPanelProps {
   /** Extra CSS classes for the root element */
   className?: string
   onReady?: () => void
+  onPreviewReady?: (url: string | null) => void
 }
 
-export function V86Terminal({ defaultTab = "agent", className, onReady }: V86TerminalPanelProps) {
+export function V86Terminal({ defaultTab = "agent", className, onReady, onPreviewReady }: V86TerminalPanelProps) {
   const [activeTab, setActiveTab] = useState<TerminalTab>(defaultTab)
   const { status, statusMessage } = useEmulatorStatus()
   const hiddenScreenRef = useRef<HTMLDivElement>(null)
@@ -356,6 +359,16 @@ export function V86Terminal({ defaultTab = "agent", className, onReady }: V86Ter
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Listen for WebContainer preview URL changes
+  useEffect(() => {
+    return subscribeWCStatus(() => {
+      const url = getWCStore().previewUrl
+      if (onPreviewReady && url) {
+        onPreviewReady(url)
+      }
+    })
+  }, [onPreviewReady])
 
   // Register a serial listener that writes to a given xterm write function
   const makeOnMount = useCallback((channel: "agent" | "user") => {
@@ -382,10 +395,10 @@ export function V86Terminal({ defaultTab = "agent", className, onReady }: V86Ter
   }, [])
 
   const tabs: { id: TerminalTab; label: string; icon: React.ReactNode; color?: string }[] = [
-    { id: "agent",  label: "Agent",   icon: <Bot      className="size-3" />, color: "text-emerald-400" },
-    { id: "user",   label: "User",    icon: <User     className="size-3" />, color: "text-blue-400"    },
-    { id: "output", label: "Output",  icon: <FileText className="size-3" />                            },
-    { id: "debug",  label: "Debug",   icon: <Bug      className="size-3" />, color: "text-amber-400"   },
+    { id: "agent",        label: "Agent (V86)",  icon: <Bot          className="size-3" />, color: "text-emerald-400" },
+    { id: "webcontainer", label: "WebContainer", icon: <MonitorPlay  className="size-3" />, color: "text-blue-400"    },
+    { id: "output",       label: "Output",       icon: <FileText     className="size-3" />                            },
+    { id: "debug",        label: "Debug",        icon: <Bug          className="size-3" />, color: "text-amber-400"   },
   ]
 
   const clearTab = () => {
@@ -456,14 +469,8 @@ export function V86Terminal({ defaultTab = "agent", className, onReady }: V86Ter
           ready={status === "ready"}
         />
 
-        {/* User terminal (CSS hidden when not active) */}
-        <XTermPanel
-          label="User"
-          active={activeTab === "user"}
-          onMount={makeOnMount("user")}
-          onKey={sendKey}
-          ready={status === "ready"}
-        />
+        {/* WebContainer terminal (replaces User) */}
+        <WebContainerTerminal active={activeTab === "webcontainer"} />
 
         {/* Output log panel */}
         <LogPanel channel="output" active={activeTab === "output"} />

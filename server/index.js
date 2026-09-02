@@ -105,14 +105,30 @@ app.use("/api/project", projectRoutes)
 app.use("/api/agent",  agentRoutes)
 
 // ─── Serve Static Frontend (Production) ───────────────────────────────────────
-app.use(express.static(path.join(__dirname, "../dist")))
+// WebContainer requires crossOriginIsolated — send COOP + COEP on HTML pages.
+// We set these ONLY for the SPA HTML, not for /api or /auth routes (those use
+// CORS and would break if COEP were applied there too).
+const wcHeaders = {
+  "Cross-Origin-Opener-Policy":   "same-origin",
+  "Cross-Origin-Embedder-Policy": "require-corp",
+}
+
+app.use(express.static(path.join(__dirname, "../dist"), {
+  setHeaders(res, filePath) {
+    // Apply isolation headers only on the HTML entry point
+    if (filePath.endsWith("index.html")) {
+      Object.entries(wcHeaders).forEach(([k, v]) => res.setHeader(k, v))
+    }
+  },
+}))
 
 app.get("*", (req, res, next) => {
   // If it's an API route that wasn't found, let it pass to the 404/error handler
   if (req.path.startsWith("/api") || req.path.startsWith("/auth")) {
     return next()
   }
-  // Otherwise serve the React frontend index.html
+  // Serve React frontend index.html with required isolation headers
+  Object.entries(wcHeaders).forEach(([k, v]) => res.setHeader(k, v))
   res.sendFile(path.join(__dirname, "../dist/index.html"))
 })
 

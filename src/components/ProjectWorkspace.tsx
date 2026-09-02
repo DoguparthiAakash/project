@@ -93,32 +93,6 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   const [pendingFixes, setPendingFixes] = useState<any[]>([])
   const [savingFile, setSavingFile] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  
-  const terminalRef = useRef<HTMLDivElement>(null)
-  const xtermRef = useRef<XTerminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
-
-  // Initialize Xterm
-  useEffect(() => {
-    if (terminalRef.current && !xtermRef.current) {
-      const term = new XTerminal({
-        theme: { background: '#09090b' },
-        fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
-        fontSize: 12,
-        cursorBlink: true,
-      })
-      const fitAddon = new FitAddon()
-      term.loadAddon(fitAddon)
-      term.open(terminalRef.current)
-      fitAddon.fit()
-      xtermRef.current = term
-      fitAddonRef.current = fitAddon
-      term.writeln('CodeSage WebContainer Terminal Ready.')
-    }
-    const handleResize = () => { fitAddonRef.current?.fit() }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // Ctrl+Shift+P → open command palette (global listener)
   useEffect(() => {
@@ -322,29 +296,19 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   }
 
   const handleRun = async () => {
-    if (!xtermRef.current) return
     setRunning(true)
     setPreviewUrl(null)
-    xtermRef.current.writeln("\r\n$ Starting WebContainer...")
+    toast.info("Starting WebContainer...")
     try {
-      const wc = await getWebContainer()
-      
-      // Ensure we only bind this once, or clean it up if bound multiple times.
-      // But for simplicity, we bind it here.
-      wc.on('server-ready', (_port: number, url: string) => {
-        setPreviewUrl(url)
-        xtermRef.current?.writeln(`\r\n[Web Preview Ready at ${url}]`)
-        toast.success("Web Preview Started")
-      })
-
       await mountRepoAndRun(owner, repoName, branch, (data) => {
-        xtermRef.current?.write(data)
+        // Output from background install/dev processes can be logged to console or ignored,
+        // since the user can also use the interactive shell tab.
+        console.log("[WC Build]", data)
       })
-      
-      toast.success("Project executed")
+      toast.success("Project execution started")
     } catch (err: any) {
-      xtermRef.current.writeln(`\r\nError: ${err.message}`)
       toast.error(err.message || "Failed to run project")
+    } finally {
       setRunning(false)
     }
   }
@@ -893,9 +857,10 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
                 {/* Single always-mounted V86Terminal owns all tab management */}
                 <div className="flex flex-col h-full">
                   <V86Terminal
-                    defaultTab="agent"
+                    defaultTab="webcontainer"
                     className="flex-1 min-h-0"
                     onReady={() => {}}
+                    onPreviewReady={setPreviewUrl}
                   />
                   {previewUrl && (
                     <div className="shrink-0 border-t border-border">
