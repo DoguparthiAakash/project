@@ -21,8 +21,8 @@
 import { useRef } from "react"
 import type * as monaco from "monaco-editor"
 import {
-  WrapText, Map, AlignJustify, Fold, Maximize2, ChevronsUpDown,
-  Copy, Check, MousePointerClick, FileText,
+  WrapText, Map, AlignJustify, FoldVertical, Maximize2, ChevronsUpDown,
+  Copy, Check, Pointer,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -159,7 +159,7 @@ export function EditorToolbar({
       />
 
       <ToolbarButton
-        icon={folded ? <Maximize2 className="size-3" /> : <Fold className="size-3" />}
+        icon={folded ? <Maximize2 className="size-3" /> : <FoldVertical className="size-3" />}
         label={folded ? "Unfold" : "Fold All"}
         onClick={handleFoldToggle}
         title={folded ? "Unfold All" : "Fold All"}
@@ -209,7 +209,7 @@ export function EditorToolbar({
         title="Go to line / column"
         className="flex items-center gap-1 px-2 h-full text-[11px] font-mono text-zinc-400 hover:text-zinc-200 hover:bg-white/5 rounded transition-colors"
       >
-        <MousePointerClick className="size-3 text-zinc-600" />
+        <Pointer className="size-3 text-zinc-600" />
         <span>{cursorInfo}</span>
         {selectionCount > 0 && (
           <span className="text-blue-400 ml-1">
