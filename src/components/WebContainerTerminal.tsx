@@ -29,10 +29,11 @@ export function WebContainerTerminal({ active }: WebContainerTerminalProps) {
 
   // Status sync
   useEffect(() => {
-    return subscribeWCStatus(() => {
+    const unsub = subscribeWCStatus(() => {
       setStatus(getWCStore().status)
       setMessage(getWCStore().statusMessage)
     })
+    return () => { unsub() }
   }, [])
 
   // Boot WebContainer immediately if not already booted

@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileTree } from "@/components/FileTree"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { ghGetFile, projectPushFixes, projectChat, getChatThreads, createChatThread, getThreadHistory, clearChatHistory, type GHRepo } from "@/services/api"
-import { getWebContainer, mountRepoAndRun, writeFileToWebContainer } from "@/services/webcontainer"
+import { getWebContainer, mountRepoAndRun, writeFileToWebContainer, executeCommand } from "@/services/webcontainer"
 import { loadSettings } from "@/services/settings"
 import { writeFileToCheerpX } from "@/services/cheerpx"
 import { V86Terminal } from "./V86Terminal"
@@ -314,21 +314,20 @@ export function ProjectWorkspace({ repo, onBack }: ProjectWorkspaceProps) {
   }
 
   const handleExecuteCommand = async (command: string) => {
-    if (!xtermRef.current) return
     setExecuting(true)
-    xtermRef.current.writeln(`\r\n$ ${command}`)
+    toast.info(`Executing: ${command}`)
     try {
-      const wc = await getWebContainer()
-      const process = await wc.spawn('sh', ['-c', command])
-      process.output.pipeTo(new WritableStream({
-        write(data) {
-          xtermRef.current?.write(data)
-        }
-      }))
-      const exitCode = await process.exit
-      xtermRef.current.writeln(`\r\n[Exit Code: ${exitCode}]`)
+      // executeCommand is available in webcontainer.ts and handles spawning
+      const exitCode = await executeCommand('sh', ['-c', command], (data) => {
+        console.log(`[WC Exec] ${data}`)
+      })
+      
+      if (exitCode === 0) {
+        toast.success("Command executed successfully")
+      } else {
+        toast.error(`Command failed with exit code ${exitCode}`)
+      }
     } catch (err: any) {
-      xtermRef.current.writeln(`\r\nError: ${err.message}`)
       toast.error(err.message || "Failed to execute command")
     } finally {
       setExecuting(false)

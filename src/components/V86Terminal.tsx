@@ -362,12 +362,13 @@ export function V86Terminal({ defaultTab = "agent", className, onReady, onPrevie
 
   // Listen for WebContainer preview URL changes
   useEffect(() => {
-    return subscribeWCStatus(() => {
+    const unsub = subscribeWCStatus(() => {
       const url = getWCStore().previewUrl
       if (onPreviewReady && url) {
         onPreviewReady(url)
       }
     })
+    return () => { unsub() }
   }, [onPreviewReady])
 
   // Register a serial listener that writes to a given xterm write function
@@ -457,8 +458,8 @@ export function V86Terminal({ defaultTab = "agent", className, onReady, onPrevie
         {/* Hidden v86 VGA screen — required by the emulator but invisible to users */}
         <div ref={hiddenScreenRef} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none", overflow: "hidden" }} aria-hidden />
 
-        {/* Boot overlay — shown on top of everything until ready */}
-        <BootOverlay status={status} message={statusMessage} />
+        {/* Boot overlay — shown only over the agent terminal until ready */}
+        {activeTab === "agent" && <BootOverlay status={status} message={statusMessage} />}
 
         {/* Agent terminal (CSS hidden when not active) */}
         <XTermPanel
