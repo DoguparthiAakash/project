@@ -97,66 +97,102 @@ export async function generateWithAnthropic(prompt, { apiKey, model } = {}) {
 // Any other error (auth, bad request, etc.) is re-thrown immediately.
 
 export const GROQ_MODEL_CHAIN = [
-  "llama-3.1-8b-instant",          // fastest, lowest latency
-  "llama-3.2-3b-preview",           // tiny, ultra-fast fallback
-  "gemma2-9b-it",                   // Google Gemma via Groq
-  "mixtral-8x7b-32768",             // MoE — large context, quick
-  "llama3-8b-8192",                 // stable older 8b
-  "llama3-70b-8192",                // older 70b, strong
-  "llama-3.3-70b-versatile",        // newest 70b, most capable
-  "deepseek-r1-distill-llama-70b",  // reasoning model, last resort
+  // ── Free-tier models confirmed working on Groq (2025) ──────────────────────
+  // Ordered fastest → most capable. Each is tried in turn on quota/availability errors.
+  "llama-3.1-8b-instant",          // fastest — primary choice
+  "llama-3.2-1b-preview",           // smallest, ultra-fast fallback
+  "gemma2-9b-it",                   // Google Gemma — reliable free tier
+  "llama-3.3-70b-versatile",        // most capable free model
+  "llama-3.2-90b-vision-preview",   // large vision model, good fallback
+  "deepseek-r1-distill-llama-70b",  // reasoning model (no JSON mode — handled below)
 ]
 
-/** Returns true for transient/quota errors that warrant trying the next model */
+// Models that do NOT support response_format: json_object
+const GROQ_NO_JSON_MODE = new Set([
+  "deepseek-r1-distill-llama-70b",
+  "llama-3.2-1b-preview",
+  "llama-3.2-90b-vision-preview",
+])
+
+/** Returns true for errors that warrant skipping to the next model */
 function isGroqSkippable(err) {
-  const msg  = err?.message?.toLowerCase() ?? ""
-  const code = err?.status ?? err?.statusCode ?? 0
+  const msg  = (err?.message ?? "").toLowerCase()
+  const code = err?.status ?? err?.statusCode ?? err?.response?.status ?? 0
   return (
-    code === 429 || code === 404 || code === 503 ||
+    code === 429 || code === 404 || code === 503 || code === 408 ||
     msg.includes("rate limit") ||
+    msg.includes("rate_limit") ||
     msg.includes("model not found") ||
     msg.includes("does not exist") ||
     msg.includes("not available") ||
-    msg.includes("temporarily unavailable")
+    msg.includes("unavailable for free") ||
+    msg.includes("paid version") ||
+    msg.includes("decommissioned") ||
+    msg.includes("deprecated") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("overloaded") ||
+    msg.includes("no endpoints found")
   )
+}
+
+/** Try a single Groq model, with automatic JSON-mode fallback for models that don’t support it */
+async function tryGroqModel(client, mdl, requestBody) {
+  try {
+    const res = await client.chat.completions.create({
+      ...requestBody,
+      model: mdl,
+      response_format: GROQ_NO_JSON_MODE.has(mdl)
+        ? undefined
+        : { type: "json_object" },
+    })
+    return res.choices[0].message.content
+  } catch (err) {
+    // If the model rejected JSON mode specifically, retry without it
+    const msg = (err?.message ?? "").toLowerCase()
+    if (
+      (err?.status === 400 || err?.statusCode === 400) &&
+      (msg.includes("response_format") || msg.includes("json") || msg.includes("format"))
+    ) {
+      console.warn(`[Groq] ${mdl} doesn't support JSON mode — retrying without it`)
+      const res = await client.chat.completions.create({
+        ...requestBody,
+        model: mdl,
+        response_format: undefined,
+      })
+      return res.choices[0].message.content
+    }
+    throw err
+  }
 }
 
 export async function generateWithGroq(prompt, { apiKey, model } = {}) {
   const key    = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
+  const baseBody = {
+    messages:    [{ role: "user", content: prompt }],
+    temperature: 0.1,
+    max_tokens:  4096,
+  }
 
-  // If caller forces a specific model, honour it without rotation
+  // Caller-specified model: honour it, no rotation
   if (model) {
-    const res = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    })
-    return res.choices[0].message.content
+    return tryGroqModel(client, model, baseBody)
   }
 
   let lastError
   for (const mdl of GROQ_MODEL_CHAIN) {
     try {
       console.log(`[Groq] Trying model: ${mdl}`)
-      const res = await client.chat.completions.create({
-        model: mdl,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 4096,
-        response_format: { type: "json_object" },
-      })
-      console.log(`[Groq] Success with model: ${mdl}`)
-      return res.choices[0].message.content
+      const result = await tryGroqModel(client, mdl, baseBody)
+      console.log(`[Groq] ✓ Success with model: ${mdl}`)
+      return result
     } catch (err) {
       if (isGroqSkippable(err)) {
-        console.warn(`[Groq] Model ${mdl} unavailable (${err?.status ?? err.message}), trying next...`)
+        console.warn(`[Groq] ✗ ${mdl} — ${err?.status ?? "err"}: ${err.message?.slice(0, 80)}. Trying next...`)
         lastError = err
         continue
       }
-      throw err // non-recoverable error — bubble up immediately
+      throw err // auth error, bad prompt etc. — no point retrying
     }
   }
 
@@ -516,37 +552,25 @@ export async function chatWithGroq(messages, { apiKey, model } = {}) {
   const key    = resolveKey(apiKey, "GROQ_API_KEY", "Groq")
   const client = new OpenAI({ apiKey: key, baseURL: "https://api.groq.com/openai/v1" })
 
-  // Groq text models don't support vision — strip attachment metadata
+  // Groq text models don’t support vision — strip attachment metadata
   const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
+  const baseBody = { messages: formattedMessages, temperature: 0.1, max_tokens: 4096 }
 
-  // If caller forces a specific model, honour it without rotation
+  // Caller-specified model: honour it, no rotation
   if (model) {
-    const res = await client.chat.completions.create({
-      model,
-      messages: formattedMessages,
-      temperature: 0.1,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    })
-    return res.choices[0].message.content
+    return tryGroqModel(client, model, baseBody)
   }
 
   let lastError
   for (const mdl of GROQ_MODEL_CHAIN) {
     try {
       console.log(`[Groq/chat] Trying model: ${mdl}`)
-      const res = await client.chat.completions.create({
-        model: mdl,
-        messages: formattedMessages,
-        temperature: 0.1,
-        max_tokens: 4096,
-        response_format: { type: "json_object" },
-      })
-      console.log(`[Groq/chat] Success with model: ${mdl}`)
-      return res.choices[0].message.content
+      const result = await tryGroqModel(client, mdl, baseBody)
+      console.log(`[Groq/chat] ✓ Success with model: ${mdl}`)
+      return result
     } catch (err) {
       if (isGroqSkippable(err)) {
-        console.warn(`[Groq/chat] Model ${mdl} unavailable (${err?.status ?? err.message}), trying next...`)
+        console.warn(`[Groq/chat] ✗ ${mdl} — ${err?.status ?? "err"}: ${err.message?.slice(0, 80)}. Trying next...`)
         lastError = err
         continue
       }
